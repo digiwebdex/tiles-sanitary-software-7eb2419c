@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { purchaseService } from "@/services/purchaseService";
 import PurchaseForm from "@/modules/purchases/PurchaseForm";
 import type { PurchaseFormValues } from "@/modules/purchases/purchaseSchema";
@@ -7,18 +8,17 @@ import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// TODO: Replace with actual dealer_id and role from auth context
-const TEMP_DEALER_ID = "00000000-0000-0000-0000-000000000000";
-const TEMP_SHOW_OFFER = true; // dealer_admin or super_admin
-
 const CreatePurchasePage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { profile, isDealerAdmin, isSuperAdmin } = useAuth();
+  const dealerId = profile?.dealer_id ?? "";
+  const showOfferPrice = isDealerAdmin || isSuperAdmin;
 
   const mutation = useMutation({
     mutationFn: async (values: PurchaseFormValues) => {
       await purchaseService.create({
-        dealer_id: TEMP_DEALER_ID,
+        dealer_id: dealerId,
         supplier_id: values.supplier_id,
         invoice_number: values.invoice_number || "",
         purchase_date: values.purchase_date,
@@ -44,8 +44,8 @@ const CreatePurchasePage = () => {
         <h1 className="text-2xl font-bold text-foreground">New Purchase</h1>
       </div>
       <PurchaseForm
-        dealerId={TEMP_DEALER_ID}
-        showOfferPrice={TEMP_SHOW_OFFER}
+        dealerId={dealerId}
+        showOfferPrice={showOfferPrice}
         onSubmit={async (v) => { await mutation.mutateAsync(v); }}
         isLoading={mutation.isPending}
       />

@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { salesReturnService } from "@/services/salesReturnService";
 import SalesReturnForm from "@/modules/sales-returns/SalesReturnForm";
 import type { SalesReturnFormValues } from "@/modules/sales-returns/salesReturnSchema";
@@ -7,16 +8,16 @@ import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const TEMP_DEALER_ID = "00000000-0000-0000-0000-000000000000";
-
 const CreateSalesReturnPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { profile } = useAuth();
+  const dealerId = profile?.dealer_id ?? "";
 
   const mutation = useMutation({
     mutationFn: async (values: SalesReturnFormValues) => {
       await salesReturnService.create({
-        dealer_id: TEMP_DEALER_ID,
+        dealer_id: dealerId,
         sale_id: values.sale_id,
         product_id: values.product_id,
         qty: values.qty,
@@ -44,7 +45,7 @@ const CreateSalesReturnPage = () => {
         <h1 className="text-2xl font-bold text-foreground">New Sales Return</h1>
       </div>
       <SalesReturnForm
-        dealerId={TEMP_DEALER_ID}
+        dealerId={dealerId}
         onSubmit={async (v) => { await mutation.mutateAsync(v); }}
         isLoading={mutation.isPending}
       />

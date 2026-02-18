@@ -3,6 +3,11 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import AppLayout from "@/components/AppLayout";
+import LoginPage from "./pages/auth/LoginPage";
+import SubscriptionBlockedPage from "./pages/auth/SubscriptionBlockedPage";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ProductsPage from "./pages/products/ProductsPage";
@@ -18,6 +23,7 @@ import SalesReturnsPage from "./pages/sales-returns/SalesReturnsPage";
 import CreateSalesReturn from "./pages/sales-returns/CreateSalesReturn";
 import LedgerPage from "./pages/ledger/LedgerPage";
 import ReportsPage from "./pages/reports/ReportsPage";
+import AdminPage from "./pages/admin/AdminPage";
 
 const queryClient = new QueryClient();
 
@@ -27,24 +33,36 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/products" element={<ProductsPage />} />
-          <Route path="/products/new" element={<CreateProductRoute />} />
-          <Route path="/products/:id/edit" element={<EditProduct />} />
-          <Route path="/purchases" element={<PurchasesPage />} />
-          <Route path="/purchases/new" element={<CreatePurchase />} />
-          <Route path="/purchases/:id" element={<ViewPurchase />} />
-          <Route path="/sales" element={<SalesPage />} />
-          <Route path="/sales/new" element={<CreateSale />} />
-          <Route path="/sales/:id/invoice" element={<InvoicePage />} />
-          <Route path="/sales-returns" element={<SalesReturnsPage />} />
-          <Route path="/sales-returns/new" element={<CreateSalesReturn />} />
-          <Route path="/ledger" element={<LedgerPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            {/* Public */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/subscription-blocked" element={<SubscriptionBlockedPage />} />
+
+            {/* Dashboard + Reports: allowed in readonly */}
+            <Route path="/" element={<ProtectedRoute allowReadonly><AppLayout><Index /></AppLayout></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute allowReadonly><AppLayout><ReportsPage /></AppLayout></ProtectedRoute>} />
+
+            {/* Full-access routes */}
+            <Route path="/products" element={<ProtectedRoute><AppLayout><ProductsPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/products/new" element={<ProtectedRoute><AppLayout><CreateProductRoute /></AppLayout></ProtectedRoute>} />
+            <Route path="/products/:id/edit" element={<ProtectedRoute><AppLayout><EditProduct /></AppLayout></ProtectedRoute>} />
+            <Route path="/purchases" element={<ProtectedRoute><AppLayout><PurchasesPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/purchases/new" element={<ProtectedRoute><AppLayout><CreatePurchase /></AppLayout></ProtectedRoute>} />
+            <Route path="/purchases/:id" element={<ProtectedRoute><AppLayout><ViewPurchase /></AppLayout></ProtectedRoute>} />
+            <Route path="/sales" element={<ProtectedRoute><AppLayout><SalesPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/sales/new" element={<ProtectedRoute><AppLayout><CreateSale /></AppLayout></ProtectedRoute>} />
+            <Route path="/sales/:id/invoice" element={<ProtectedRoute><AppLayout><InvoicePage /></AppLayout></ProtectedRoute>} />
+            <Route path="/sales-returns" element={<ProtectedRoute><AppLayout><SalesReturnsPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/sales-returns/new" element={<ProtectedRoute><AppLayout><CreateSalesReturn /></AppLayout></ProtectedRoute>} />
+            <Route path="/ledger" element={<ProtectedRoute><AppLayout><LedgerPage /></AppLayout></ProtectedRoute>} />
+
+            {/* Admin (super_admin only — access check inside component) */}
+            <Route path="/admin" element={<ProtectedRoute><AppLayout><AdminPage /></AppLayout></ProtectedRoute>} />
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
