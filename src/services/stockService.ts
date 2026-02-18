@@ -84,6 +84,30 @@ async function applyStockChange(
   if (error) throw new Error(`Stock update failed: ${error.message}`);
 }
 
+async function updateAverageCost(
+  productId: string,
+  dealerId: string,
+  newQty: number,
+  newCostPerUnit: number
+) {
+  const stock = await getOrCreateStock(productId, dealerId);
+  const currentQty =
+    Number(stock.box_qty) + Number(stock.piece_qty);
+  const currentTotal =
+    currentQty * Number(stock.average_cost_per_unit);
+  const newTotal = newQty * newCostPerUnit;
+  const totalQty = currentQty + newQty;
+  const avgCost = totalQty > 0 ? (currentTotal + newTotal) / totalQty : 0;
+
+  const { error } = await supabase
+    .from("stock")
+    .update({ average_cost_per_unit: Math.round(avgCost * 100) / 100 })
+    .eq("product_id", productId)
+    .eq("dealer_id", dealerId);
+
+  if (error) throw new Error(`Average cost update failed: ${error.message}`);
+}
+
 export const stockService = {
   addStock: (productId: string, quantity: number, dealerId: string) =>
     applyStockChange(productId, dealerId, quantity, "add"),
@@ -100,4 +124,6 @@ export const stockService = {
     type: AdjustmentType,
     dealerId: string
   ) => applyStockChange(productId, dealerId, quantity, type),
+
+  updateAverageCost,
 };

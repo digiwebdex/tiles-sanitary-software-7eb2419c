@@ -1,0 +1,136 @@
+import { supabase } from "@/integrations/supabase/client";
+import { stockService } from "@/services/stockService";
+
+export interface PurchaseItemInput {
+  product_id: string;
+  quantity: number;
+  purchase_rate: number;
+  offer_price: number;
+  transport_cost: number;
+  labor_cost: number;
+  other_cost: number;
+}
+
+export interface CreatePurchaseInput {
+  dealer_id: string;
+  supplier_id: string;
+  invoice_number: string;
+  purchase_date: string;
+  notes?: string;
+  created_by?: string;
+  items: PurchaseItemInput[];
+}
+
+function calcLandedCost(item: PurchaseItemInput): number {
+  const itemTotal = item.quantity * item.purchase_rate;
+  return itemTotal + item.transport_cost + item.labor_cost + item.other_cost;
+}
+
+function calcTotalSft(
+  quantity: number,
+  unitType: string,
+  perBoxSft: number | null
+): number | null {
+  if (unitType === "box_sft" && perBoxSft) {
+    return quantity * perBoxSft;
+  }
+  return null;
+}
+
+export const purchaseService = {
+  async list(dealerId: string) {
+    const { data, error } = await supabase
+      .from("purchases")
+      .select("*, suppliers(name)")
+      .eq("dealer_id", dealerId)
+      .order("purchase_date", { ascending: false });
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  async getById(id: string) {
+    const { data, error } = await supabase
+      .from("purchases")
+      .select("*, suppliers(name), purchase_items(*, products(name, sku, unit_type, per_box_sft))")
+      .eq("id", id)
+      .single();
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  async create(input: CreatePurchaseInput) {
+    // Fetch product details for all items
+    const productIds = input.items.map((i) => i.product_id);
+    const { data: products, error: pErr } = await supabase
+      .from("products")
+      .select("id, unit_type, per_box_sft")
+      .in("id", productIds);
+    if (pErr) throw new Error(pErr.message);
+
+    const productMap = new Map(products!.map((p) => [p.id, p]));
+
+    // Calculate totals
+    const itemsWithCalc = input.items.map((item) => {
+      const product = productMap.get(item.product_id);
+      const landed = calcLandedCost(item);
+      const totalSft = product
+        ? calcTotalSft(item.quantity, product.unit_type, product.per_box_sft)
+        : null;
+      return { ...item, landed_cost: landed, total_sft: totalSft };
+    });
+
+    const totalAmount = itemsWithCalc.reduce((sum, i) => sum + i.landed_cost, 0);
+
+    // Insert purchase header
+    const { data: purchase, error: hErr } = await supabase
+      .from("purchases")
+      .insert({
+        dealer_id: input.dealer_id,
+        supplier_id: input.supplier_id,
+        invoice_number: input.invoice_number || null,
+        purchase_date: input.purchase_date,
+        total_amount: totalAmount,
+        notes: input.notes || null,
+        created_by: input.created_by || null,
+      })
+      .select()
+      .single();
+    if (hErr) throw new Error(hErr.message);
+
+    // Insert purchase items
+    const itemRows = itemsWithCalc.map((item) => ({
+      purchase_id: purchase!.id,
+      dealer_id: input.dealer_id,
+      product_id: item.product_id,
+      quantity: item.quantity,
+      purchase_rate: item.purchase_rate,
+      offer_price: item.offer_price,
+      transport_cost: item.transport_cost,
+      labor_cost: item.labor_cost,
+      other_cost: item.other_cost,
+      landed_cost: item.landed_cost,
+      total_sft: item.total_sft,
+      total: item.landed_cost,
+    }));
+
+    const { error: iErr } = await supabase
+      .from("purchase_items")
+      .insert(itemRows);
+    if (iErr) throw new Error(iErr.message);
+
+    // Update stock and average cost for each item
+    for (const item of itemsWithCalc) {
+      await stockService.addStock(item.product_id, item.quantity, input.dealer_id);
+      const costPerUnit =
+        item.quantity > 0 ? item.landed_cost / item.quantity : 0;
+      await stockService.updateAverageCost(
+        item.product_id,
+        input.dealer_id,
+        item.quantity,
+        costPerUnit
+      );
+    }
+
+    return purchase;
+  },
+};

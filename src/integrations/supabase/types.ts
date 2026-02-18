@@ -289,29 +289,47 @@ export type Database = {
         Row: {
           dealer_id: string
           id: string
+          labor_cost: number
+          landed_cost: number
+          offer_price: number
+          other_cost: number
           product_id: string
           purchase_id: string
-          qty: number
+          purchase_rate: number
+          quantity: number
           total: number
-          unit_price: number
+          total_sft: number | null
+          transport_cost: number
         }
         Insert: {
           dealer_id: string
           id?: string
+          labor_cost?: number
+          landed_cost?: number
+          offer_price?: number
+          other_cost?: number
           product_id: string
           purchase_id: string
-          qty: number
+          purchase_rate: number
+          quantity: number
           total?: number
-          unit_price: number
+          total_sft?: number | null
+          transport_cost?: number
         }
         Update: {
           dealer_id?: string
           id?: string
+          labor_cost?: number
+          landed_cost?: number
+          offer_price?: number
+          other_cost?: number
           product_id?: string
           purchase_id?: string
-          qty?: number
+          purchase_rate?: number
+          quantity?: number
           total?: number
-          unit_price?: number
+          total_sft?: number | null
+          transport_cost?: number
         }
         Relationships: [
           {
