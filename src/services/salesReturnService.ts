@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { stockService } from "@/services/stockService";
 import { logAudit } from "@/services/auditService";
 import { validateInput, createSalesReturnServiceSchema } from "@/lib/validators";
+import { assertDealerId } from "@/lib/tenancy";
 
 export interface CreateSalesReturnInput {
   dealer_id: string;
@@ -36,6 +37,8 @@ export const salesReturnService = {
   },
 
   async create(input: CreateSalesReturnInput) {
+    // Tenant isolation guard
+    await assertDealerId(input.dealer_id);
     // Service-level validation
     validateInput(createSalesReturnServiceSchema, input);
 
