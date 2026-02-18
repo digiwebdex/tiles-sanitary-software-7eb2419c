@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { salesService } from "@/services/salesService";
 import SaleForm from "@/modules/sales/SaleForm";
 import type { SaleFormValues } from "@/modules/sales/saleSchema";
@@ -8,17 +9,16 @@ import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// TODO: Replace with actual dealer_id from auth context
-const TEMP_DEALER_ID = "00000000-0000-0000-0000-000000000000";
-
 const CreateSalePage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { profile } = useAuth();
+  const dealerId = profile?.dealer_id ?? "";
 
   const mutation = useMutation({
     mutationFn: async (values: SaleFormValues) => {
       await salesService.create({
-        dealer_id: TEMP_DEALER_ID,
+        dealer_id: dealerId,
         customer_id: values.customer_id,
         sale_date: values.sale_date,
         discount: values.discount,
@@ -48,7 +48,7 @@ const CreateSalePage = () => {
         <h1 className="text-2xl font-bold text-foreground">New Sale</h1>
       </div>
       <SaleForm
-        dealerId={TEMP_DEALER_ID}
+        dealerId={dealerId}
         onSubmit={async (v) => { await mutation.mutateAsync(v); }}
         isLoading={mutation.isPending}
       />
