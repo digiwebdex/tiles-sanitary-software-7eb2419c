@@ -58,6 +58,71 @@ export type Database = {
           },
         ]
       }
+      customer_ledger: {
+        Row: {
+          amount: number
+          created_at: string
+          customer_id: string
+          dealer_id: string
+          description: string | null
+          id: string
+          sale_id: string | null
+          sales_return_id: string | null
+          type: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          customer_id: string
+          dealer_id: string
+          description?: string | null
+          id?: string
+          sale_id?: string | null
+          sales_return_id?: string | null
+          type: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          customer_id?: string
+          dealer_id?: string
+          description?: string | null
+          id?: string
+          sale_id?: string | null
+          sales_return_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_ledger_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_ledger_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "dealers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_ledger_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_ledger_sales_return_id_fkey"
+            columns: ["sales_return_id"]
+            isOneToOne: false
+            referencedRelation: "sales_returns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string | null
@@ -551,9 +616,11 @@ export type Database = {
           created_by: string | null
           dealer_id: string
           id: string
+          is_broken: boolean
           product_id: string
           qty: number
           reason: string | null
+          refund_amount: number
           return_date: string
           sale_id: string
         }
@@ -562,9 +629,11 @@ export type Database = {
           created_by?: string | null
           dealer_id: string
           id?: string
+          is_broken?: boolean
           product_id: string
           qty: number
           reason?: string | null
+          refund_amount?: number
           return_date?: string
           sale_id: string
         }
@@ -573,9 +642,11 @@ export type Database = {
           created_by?: string | null
           dealer_id?: string
           id?: string
+          is_broken?: boolean
           product_id?: string
           qty?: number
           reason?: string | null
+          refund_amount?: number
           return_date?: string
           sale_id?: string
         }

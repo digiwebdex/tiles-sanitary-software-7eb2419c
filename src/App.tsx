@@ -14,6 +14,8 @@ import ViewPurchase from "./pages/purchases/ViewPurchase";
 import SalesPage from "./pages/sales/SalesPage";
 import CreateSale from "./pages/sales/CreateSale";
 import InvoicePage from "./pages/sales/InvoicePage";
+import SalesReturnsPage from "./pages/sales-returns/SalesReturnsPage";
+import CreateSalesReturn from "./pages/sales-returns/CreateSalesReturn";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +36,8 @@ const App = () => (
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/sales/new" element={<CreateSale />} />
           <Route path="/sales/:id/invoice" element={<InvoicePage />} />
+          <Route path="/sales-returns" element={<SalesReturnsPage />} />
+          <Route path="/sales-returns/new" element={<CreateSalesReturn />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
