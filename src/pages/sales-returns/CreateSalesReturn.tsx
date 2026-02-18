@@ -1,0 +1,55 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { salesReturnService } from "@/services/salesReturnService";
+import SalesReturnForm from "@/modules/sales-returns/SalesReturnForm";
+import type { SalesReturnFormValues } from "@/modules/sales-returns/salesReturnSchema";
+import { toast } from "sonner";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+const TEMP_DEALER_ID = "00000000-0000-0000-0000-000000000000";
+
+const CreateSalesReturnPage = () => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: async (values: SalesReturnFormValues) => {
+      await salesReturnService.create({
+        dealer_id: TEMP_DEALER_ID,
+        sale_id: values.sale_id,
+        product_id: values.product_id,
+        qty: values.qty,
+        reason: values.reason || "",
+        is_broken: values.is_broken,
+        refund_amount: values.refund_amount,
+        return_date: values.return_date,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales-returns"] });
+      queryClient.invalidateQueries({ queryKey: ["stock"] });
+      toast.success("Return processed successfully");
+      navigate("/sales-returns");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  return (
+    <div className="container mx-auto max-w-3xl space-y-4 p-6">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/sales-returns")}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h1 className="text-2xl font-bold text-foreground">New Sales Return</h1>
+      </div>
+      <SalesReturnForm
+        dealerId={TEMP_DEALER_ID}
+        onSubmit={async (v) => { await mutation.mutateAsync(v); }}
+        isLoading={mutation.isPending}
+      />
+    </div>
+  );
+};
+
+export default CreateSalesReturnPage;
