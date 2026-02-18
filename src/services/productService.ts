@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { validateInput, createProductServiceSchema, updateProductServiceSchema } from "@/lib/validators";
 
 type Product = Database["public"]["Tables"]["products"]["Row"];
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
@@ -39,6 +40,7 @@ export const productService = {
   },
 
   async create(product: ProductInsert) {
+    validateInput(createProductServiceSchema, product);
     const { data, error } = await supabase
       .from("products")
       .insert(product)
@@ -49,6 +51,7 @@ export const productService = {
   },
 
   async update(id: string, product: ProductUpdate) {
+    validateInput(updateProductServiceSchema, product);
     const { data, error } = await supabase
       .from("products")
       .update(product)

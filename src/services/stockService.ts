@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { logAudit } from "@/services/auditService";
+import { validateInput, stockAdjustmentServiceSchema } from "@/lib/validators";
 
 interface StockProduct {
   id: string;
@@ -134,9 +135,17 @@ export const stockService = {
   adjustStock: (
     productId: string,
     quantity: number,
-    type: AdjustmentType,
+    type: "add" | "deduct",
     dealerId: string
-  ) => applyStockChange(productId, dealerId, quantity, type),
+  ) => {
+    validateInput(stockAdjustmentServiceSchema, {
+      product_id: productId,
+      dealer_id: dealerId,
+      quantity,
+      type,
+    });
+    return applyStockChange(productId, dealerId, quantity, type);
+  },
 
   updateAverageCost,
 };

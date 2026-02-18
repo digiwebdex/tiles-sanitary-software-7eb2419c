@@ -5,61 +5,100 @@ import { z } from "zod";
 export const dealerIdSchema = z.string().uuid("Invalid dealer ID");
 export const uuidSchema = z.string().uuid("Invalid ID");
 
+/** Strip dangerous characters from text fields to prevent XSS/injection */
+const safeText = (maxLen: number) =>
+  z.string().trim().max(maxLen).transform((v) =>
+    v.replace(/[<>'"`;\\]/g, "")
+  );
+
+const optionalSafeText = (maxLen: number) =>
+  safeText(maxLen).optional().or(z.literal(""));
+
+// ── Product ──
+export const createProductServiceSchema = z.object({
+  dealer_id: dealerIdSchema,
+  name: safeText(200).pipe(z.string().min(1, "Name is required")),
+  sku: safeText(50).pipe(z.string().min(1, "SKU is required")),
+  category: z.enum(["tiles", "sanitary"]),
+  unit_type: z.enum(["box_sft", "piece"]).default("box_sft"),
+  per_box_sft: z.number().min(0).nullable().optional(),
+  default_sale_rate: z.number().min(0, "Sale rate cannot be negative"),
+  reorder_level: z.number().int().min(0, "Reorder level cannot be negative").default(0),
+  brand: optionalSafeText(100),
+  color: optionalSafeText(50),
+  size: optionalSafeText(50),
+  active: z.boolean().default(true),
+});
+
+export const updateProductServiceSchema = createProductServiceSchema.partial().omit({ dealer_id: true });
+
+// ── Purchase ──
 export const createPurchaseServiceSchema = z.object({
   dealer_id: dealerIdSchema,
   supplier_id: uuidSchema,
-  invoice_number: z.string().trim().max(50).optional().or(z.literal("")),
+  invoice_number: optionalSafeText(50),
   purchase_date: z.string().min(1, "Date is required"),
-  notes: z.string().trim().max(500).optional().or(z.literal("")),
+  notes: optionalSafeText(500),
   created_by: z.string().uuid().optional(),
   items: z.array(z.object({
     product_id: uuidSchema,
     quantity: z.number().positive("Quantity must be > 0"),
-    purchase_rate: z.number().min(0),
-    offer_price: z.number().min(0),
-    transport_cost: z.number().min(0),
-    labor_cost: z.number().min(0),
-    other_cost: z.number().min(0),
+    purchase_rate: z.number().min(0, "Purchase rate cannot be negative"),
+    offer_price: z.number().min(0, "Offer price cannot be negative"),
+    transport_cost: z.number().min(0, "Transport cost cannot be negative"),
+    labor_cost: z.number().min(0, "Labor cost cannot be negative"),
+    other_cost: z.number().min(0, "Other cost cannot be negative"),
   })).min(1, "At least one item required"),
 });
 
+// ── Sale ──
 export const createSaleServiceSchema = z.object({
   dealer_id: dealerIdSchema,
   customer_id: uuidSchema,
   sale_date: z.string().min(1, "Date is required"),
-  discount: z.number().min(0).default(0),
-  discount_reference: z.string().trim().max(100).optional().or(z.literal("")),
-  client_reference: z.string().trim().max(100).optional().or(z.literal("")),
-  fitter_reference: z.string().trim().max(100).optional().or(z.literal("")),
-  paid_amount: z.number().min(0).default(0),
-  notes: z.string().trim().max(500).optional().or(z.literal("")),
+  discount: z.number().min(0, "Discount cannot be negative").default(0),
+  discount_reference: optionalSafeText(100),
+  client_reference: optionalSafeText(100),
+  fitter_reference: optionalSafeText(100),
+  paid_amount: z.number().min(0, "Paid amount cannot be negative").default(0),
+  notes: optionalSafeText(500),
   created_by: z.string().uuid().optional(),
   items: z.array(z.object({
     product_id: uuidSchema,
     quantity: z.number().positive("Quantity must be > 0"),
-    sale_rate: z.number().min(0),
+    sale_rate: z.number().min(0, "Sale rate cannot be negative"),
   })).min(1, "At least one item required"),
 });
 
+// ── Sales Return / Refund ──
 export const createSalesReturnServiceSchema = z.object({
   dealer_id: dealerIdSchema,
   sale_id: uuidSchema,
   product_id: uuidSchema,
   qty: z.number().positive("Quantity must be > 0"),
-  reason: z.string().trim().max(300).optional().or(z.literal("")),
+  reason: optionalSafeText(300),
   is_broken: z.boolean(),
-  refund_amount: z.number().min(0),
+  refund_amount: z.number().min(0, "Refund amount cannot be negative"),
   return_date: z.string().min(1),
   created_by: z.string().uuid().optional(),
 });
 
+// ── Expense ──
 export const createExpenseServiceSchema = z.object({
   dealer_id: dealerIdSchema,
-  description: z.string().trim().min(1).max(500),
+  description: safeText(500).pipe(z.string().min(1, "Description required")),
   amount: z.number().positive("Amount must be > 0"),
   expense_date: z.string().min(1),
-  category: z.string().trim().max(50).optional(),
+  category: optionalSafeText(50),
   created_by: z.string().uuid().optional(),
+});
+
+// ── Stock Adjustment ──
+export const stockAdjustmentServiceSchema = z.object({
+  product_id: uuidSchema,
+  dealer_id: dealerIdSchema,
+  quantity: z.number().positive("Quantity must be > 0"),
+  type: z.enum(["add", "deduct"], { required_error: "Type must be 'add' or 'deduct'" }),
 });
 
 export function validateInput<T>(schema: z.ZodSchema<T>, data: unknown): T {
