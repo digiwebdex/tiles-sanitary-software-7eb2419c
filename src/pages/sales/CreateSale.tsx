@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useDealerId } from "@/hooks/useDealerId";
 import { salesService } from "@/services/salesService";
 import SaleForm from "@/modules/sales/SaleForm";
 import type { SaleFormValues } from "@/modules/sales/saleSchema";
@@ -12,8 +12,7 @@ import { Button } from "@/components/ui/button";
 const CreateSalePage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { profile } = useAuth();
-  const dealerId = profile?.dealer_id ?? "";
+  const dealerId = useDealerId();
 
   const mutation = useMutation({
     mutationFn: async (values: SaleFormValues) => {

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDealerId } from "@/hooks/useDealerId";
 import { purchaseService } from "@/services/purchaseService";
 import PurchaseForm from "@/modules/purchases/PurchaseForm";
 import type { PurchaseFormValues } from "@/modules/purchases/purchaseSchema";
@@ -11,8 +12,8 @@ import { Button } from "@/components/ui/button";
 const CreatePurchasePage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { profile, isDealerAdmin, isSuperAdmin } = useAuth();
-  const dealerId = profile?.dealer_id ?? "";
+  const { isDealerAdmin, isSuperAdmin } = useAuth();
+  const dealerId = useDealerId();
   const showOfferPrice = isDealerAdmin || isSuperAdmin;
 
   const mutation = useMutation({

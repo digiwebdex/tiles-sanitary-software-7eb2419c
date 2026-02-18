@@ -3,6 +3,7 @@ import { stockService } from "@/services/stockService";
 import { customerLedgerService, cashLedgerService } from "@/services/ledgerService";
 import { logAudit } from "@/services/auditService";
 import { validateInput, createSaleServiceSchema } from "@/lib/validators";
+import { assertDealerId } from "@/lib/tenancy";
 
 export interface SaleItemInput {
   product_id: string;
@@ -61,6 +62,8 @@ export const salesService = {
   },
 
   async create(input: CreateSaleInput) {
+    // Tenant isolation guard — reject forged dealer_id
+    await assertDealerId(input.dealer_id);
     // Service-level validation
     validateInput(createSaleServiceSchema, input);
 

@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { expenseLedgerService } from "@/services/ledgerService";
 import { cashLedgerService } from "@/services/ledgerService";
 import { validateInput, createExpenseServiceSchema } from "@/lib/validators";
+import { assertDealerId } from "@/lib/tenancy";
 
 export interface CreateExpenseInput {
   dealer_id: string;
@@ -24,6 +25,8 @@ export const expenseService = {
   },
 
   async create(input: CreateExpenseInput) {
+    // Tenant isolation guard
+    await assertDealerId(input.dealer_id);
     // Service-level validation
     validateInput(createExpenseServiceSchema, input);
 
