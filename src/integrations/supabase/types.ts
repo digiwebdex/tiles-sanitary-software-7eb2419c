@@ -411,28 +411,31 @@ export type Database = {
           dealer_id: string
           id: string
           product_id: string
-          qty: number
+          quantity: number
           sale_id: string
+          sale_rate: number
           total: number
-          unit_price: number
+          total_sft: number | null
         }
         Insert: {
           dealer_id: string
           id?: string
           product_id: string
-          qty: number
+          quantity: number
           sale_id: string
+          sale_rate: number
           total?: number
-          unit_price: number
+          total_sft?: number | null
         }
         Update: {
           dealer_id?: string
           id?: string
           product_id?: string
-          qty?: number
+          quantity?: number
           sale_id?: string
+          sale_rate?: number
           total?: number
-          unit_price?: number
+          total_sft?: number | null
         }
         Relationships: [
           {
@@ -460,40 +463,70 @@ export type Database = {
       }
       sales: {
         Row: {
+          client_reference: string | null
+          cogs: number
           created_at: string
           created_by: string | null
           customer_id: string
           dealer_id: string
           discount: number
+          discount_reference: string | null
+          due_amount: number
+          fitter_reference: string | null
           id: string
           invoice_number: string | null
           notes: string | null
+          paid_amount: number
+          profit: number
           sale_date: string
           total_amount: number
+          total_box: number
+          total_piece: number
+          total_sft: number
         }
         Insert: {
+          client_reference?: string | null
+          cogs?: number
           created_at?: string
           created_by?: string | null
           customer_id: string
           dealer_id: string
           discount?: number
+          discount_reference?: string | null
+          due_amount?: number
+          fitter_reference?: string | null
           id?: string
           invoice_number?: string | null
           notes?: string | null
+          paid_amount?: number
+          profit?: number
           sale_date?: string
           total_amount?: number
+          total_box?: number
+          total_piece?: number
+          total_sft?: number
         }
         Update: {
+          client_reference?: string | null
+          cogs?: number
           created_at?: string
           created_by?: string | null
           customer_id?: string
           dealer_id?: string
           discount?: number
+          discount_reference?: string | null
+          due_amount?: number
+          fitter_reference?: string | null
           id?: string
           invoice_number?: string | null
           notes?: string | null
+          paid_amount?: number
+          profit?: number
           sale_date?: string
           total_amount?: number
+          total_box?: number
+          total_piece?: number
+          total_sft?: number
         }
         Relationships: [
           {
