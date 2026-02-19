@@ -21,6 +21,7 @@ export interface CreateSaleInput {
   client_reference: string;
   fitter_reference: string;
   paid_amount: number;
+  payment_mode?: string;
   notes?: string;
   created_by?: string;
   items: SaleItemInput[];
@@ -92,18 +93,24 @@ export const salesService = {
       const product = productMap.get(item.product_id);
       const stock = stockMap.get(item.product_id);
       const avgCost = stock ? Number(stock.average_cost_per_unit) : 0;
-      const itemTotal = item.quantity * item.sale_rate;
-      const itemCogs = item.quantity * avgCost;
+      const unitType = product?.unit_type ?? "piece";
+      const perBoxSft = product?.per_box_sft ?? 0;
+      let itemTotal: number;
       let itemSft: number | null = null;
 
-      if (product?.unit_type === "box_sft") {
+      if (unitType === "box_sft") {
         totalBox += item.quantity;
-        itemSft = item.quantity * (product.per_box_sft ?? 0);
+        itemSft = item.quantity * perBoxSft;
         totalSft += itemSft;
+        // gross = total_sft × sale_rate
+        itemTotal = itemSft * item.sale_rate;
       } else {
         totalPiece += item.quantity;
+        // gross = piece_qty × sale_rate
+        itemTotal = item.quantity * item.sale_rate;
       }
 
+      const itemCogs = item.quantity * avgCost;
       totalCogs += itemCogs;
 
       return { ...item, total: itemTotal, total_sft: itemSft };
@@ -136,6 +143,7 @@ export const salesService = {
         total_sft: totalSft,
         total_piece: totalPiece,
         notes: input.notes || null,
+        payment_mode: input.payment_mode || null,
         created_by: input.created_by || null,
       })
       .select()
