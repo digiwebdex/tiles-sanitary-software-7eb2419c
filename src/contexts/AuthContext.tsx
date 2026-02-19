@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useRef, ReactNode } fro
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { parseLocalDate } from "@/lib/utils";
+import { subLog } from "@/lib/logger";
 
 interface Profile {
   id: string;
@@ -121,12 +122,12 @@ async function validateAndSyncSubscription(
     .maybeSingle();
 
   if (error) {
-    console.error("[SubscriptionDebug] Fetch error:", error.message);
+    subLog.error("Fetch error:", error.message);
     return null;
   }
 
   if (!sub) {
-    console.warn("[SubscriptionDebug] No subscription found for dealer_id:", dealerId);
+    subLog.warn("No subscription found for dealer_id:", dealerId);
     return null;
   }
 
@@ -137,21 +138,21 @@ async function validateAndSyncSubscription(
   const endDate = parseLocalDate(sub.end_date);
 
   // --- Debug logging ---
-  console.log("[SubscriptionDebug] dealer_id     :", dealerId);
-  console.log("[SubscriptionDebug] sub.dealer_id :", sub.dealer_id);
-  console.log("[SubscriptionDebug] status        :", sub.status);
-  console.log("[SubscriptionDebug] end_date      :", sub.end_date ?? "null");
-  console.log("[SubscriptionDebug] current_date  :", today.toISOString().split("T")[0]);
-  console.log("[SubscriptionDebug] parsed endDate:", endDate?.toLocaleDateString() ?? "null");
+  subLog.debug("dealer_id     :", dealerId);
+  subLog.debug("sub.dealer_id :", sub.dealer_id);
+  subLog.debug("status        :", sub.status);
+  subLog.debug("end_date      :", sub.end_date ?? "null");
+  subLog.debug("current_date  :", today.toISOString().split("T")[0]);
+  subLog.debug("parsed endDate:", endDate?.toLocaleDateString() ?? "null");
 
   // Validate dealer_id match (sanity check)
   if (sub.dealer_id !== dealerId) {
-    console.error("[SubscriptionDebug] dealer_id MISMATCH — blocking access.");
+    subLog.error("dealer_id MISMATCH — blocking access.");
     return null;
   }
 
   if (!endDate) {
-    console.warn("[SubscriptionDebug] No end_date on subscription — treating as blocked.");
+    subLog.warn("No end_date on subscription — treating as blocked.");
     return sub as Subscription;
   }
 
@@ -162,10 +163,10 @@ async function validateAndSyncSubscription(
   if (today <= endDate) {
     if (sub.status !== "active") {
       await supabase.from("subscriptions").update({ status: "active" }).eq("id", sub.id);
-      console.log("[SubscriptionDebug] Status corrected → active");
+      subLog.info("Status corrected → active");
       return { ...(sub as Subscription), status: "active" };
     }
-    console.log("[SubscriptionDebug] Access: FULL (active, end_date:", sub.end_date, ")");
+    subLog.info("Access: FULL (active, end_date:", sub.end_date, ")");
     return sub as Subscription;
   }
 
@@ -173,19 +174,19 @@ async function validateAndSyncSubscription(
   if (today > endDate && today <= graceEnd) {
     if (sub.status !== "expired") {
       await supabase.from("subscriptions").update({ status: "expired" }).eq("id", sub.id);
-      console.log("[SubscriptionDebug] Status updated → expired (grace window)");
+      subLog.info("Status updated → expired (grace window)");
       return { ...(sub as Subscription), status: "expired" };
     }
-    console.log("[SubscriptionDebug] Access: GRACE period");
+    subLog.info("Access: GRACE period");
     return sub as Subscription;
   }
 
   // Case 3: Beyond grace → expired, block access
   if (sub.status !== "expired") {
     await supabase.from("subscriptions").update({ status: "expired" }).eq("id", sub.id);
-    console.log("[SubscriptionDebug] Status updated → expired (past grace)");
+    subLog.info("Status updated → expired (past grace)");
   }
-  console.log("[SubscriptionDebug] Access: BLOCKED (expired past grace)");
+  subLog.info("Access: BLOCKED (expired past grace)");
   return { ...(sub as Subscription), status: "expired" };
 }
 
@@ -254,7 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await loadUserData(session.user.id);
         }
       } catch (err) {
-        console.error("Auth init error:", err);
+        subLog.error("Auth init error:", err);
       } finally {
         // Only clear loading after ALL data (profile, roles, subscription) is set.
         // This prevents ProtectedRoute from evaluating with stale/empty state.
