@@ -181,27 +181,39 @@ export type Database = {
           address: string | null
           created_at: string
           dealer_id: string
+          email: string | null
           id: string
           name: string
+          opening_balance: number
           phone: string | null
+          reference_name: string | null
+          status: string
           type: Database["public"]["Enums"]["customer_type"]
         }
         Insert: {
           address?: string | null
           created_at?: string
           dealer_id: string
+          email?: string | null
           id?: string
           name: string
+          opening_balance?: number
           phone?: string | null
+          reference_name?: string | null
+          status?: string
           type?: Database["public"]["Enums"]["customer_type"]
         }
         Update: {
           address?: string | null
           created_at?: string
           dealer_id?: string
+          email?: string | null
           id?: string
           name?: string
+          opening_balance?: number
           phone?: string | null
+          reference_name?: string | null
+          status?: string
           type?: Database["public"]["Enums"]["customer_type"]
         }
         Relationships: [
