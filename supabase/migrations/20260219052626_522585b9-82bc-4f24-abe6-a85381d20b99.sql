@@ -1,0 +1,1 @@
+ALTER TABLE public.sales ADD COLUMN payment_mode text DEFAULT null;
