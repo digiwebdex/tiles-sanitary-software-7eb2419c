@@ -35,3 +35,24 @@ export function formatAmount(amount: number | string | null | undefined): string
     maximumFractionDigits: 2,
   });
 }
+
+// ─── Date Helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Parses a "YYYY-MM-DD" date string as a LOCAL midnight Date object.
+ *
+ * Using `new Date("YYYY-MM-DD")` interprets the string as UTC midnight,
+ * which causes off-by-one day bugs for users in positive UTC offsets
+ * (e.g. UTC+6 Bangladesh). This function avoids that by constructing
+ * the date from its individual parts in local time.
+ *
+ * @param dateStr - ISO date string "YYYY-MM-DD"
+ * @returns Date at local midnight, or null if input is falsy / invalid
+ */
+export function parseLocalDate(dateStr: string | null | undefined): Date | null {
+  if (!dateStr) return null;
+  const parts = dateStr.split("-").map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return null;
+  const [year, month, day] = parts;
+  return new Date(year, month - 1, day); // local midnight — no UTC offset
+}
