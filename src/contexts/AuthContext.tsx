@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+import { parseLocalDate } from "@/lib/utils";
 
 interface Profile {
   id: string;
@@ -78,12 +79,8 @@ function computeAccessLevel(
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Parse end_date as LOCAL date (avoid UTC midnight shift in non-UTC timezones)
-    let endDate: Date | null = null;
-    if (sub.end_date) {
-      const [year, month, day] = sub.end_date.split("-").map(Number);
-      endDate = new Date(year, month - 1, day); // local date, no UTC shift
-    }
+    // Parse end_date as LOCAL midnight (timezone-safe — avoids UTC off-by-one)
+    const endDate = parseLocalDate(sub.end_date);
 
     // Suspended → blocked immediately
     if (sub.status === "suspended") return "blocked";
@@ -136,12 +133,8 @@ async function validateAndSyncSubscription(
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Parse end_date as LOCAL date to avoid UTC midnight timezone shifts
-  let endDate: Date | null = null;
-  if (sub.end_date) {
-    const [year, month, day] = sub.end_date.split("-").map(Number);
-    endDate = new Date(year, month - 1, day);
-  }
+  // Parse end_date as LOCAL midnight (timezone-safe — avoids UTC off-by-one)
+  const endDate = parseLocalDate(sub.end_date);
 
   // --- Debug logging ---
   console.log("[SubscriptionDebug] dealer_id     :", dealerId);
