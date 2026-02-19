@@ -67,16 +67,14 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           })}
           {isSuperAdmin && (
             <button
-              onClick={() => navigate("/admin")}
+              onClick={() => navigate("/super-admin")}
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
-                location.pathname === "/admin"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               )}
             >
               <Settings className="h-4 w-4" />
-              Admin
+              Super Admin
             </button>
           )}
         </nav>
