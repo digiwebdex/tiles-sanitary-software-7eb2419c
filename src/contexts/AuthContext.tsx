@@ -46,23 +46,49 @@ export function useAuth() {
   return ctx;
 }
 
-function computeAccessLevel(sub: Subscription | null, isSuperAdmin: boolean): AccessLevel {
+/**
+ * Computes access level based on role and subscription state.
+ *
+ * Rules:
+ *  1. super_admin  → always "full", subscription never checked
+ *  2. dealer_admin / salesman with no dealer_id → "blocked"
+ *  3. dealer_admin / salesman subscription states → full / grace / readonly / blocked
+ *  4. Any other authenticated user (edge case) → "full"
+ */
+function computeAccessLevel(
+  sub: Subscription | null,
+  fetchedRoles: UserRole[],
+  dealerId: string | null
+): AccessLevel {
+  const isSuperAdmin = fetchedRoles.some((r) => r.role === "super_admin");
+  const isDealerRole = fetchedRoles.some(
+    (r) => r.role === "dealer_admin" || r.role === "salesman"
+  );
+
+  // Rule 1: super_admin always gets full access
   if (isSuperAdmin) return "full";
-  if (!sub) return "blocked";
-  if (sub.status === "active") return "full";
-  if (sub.status === "suspended") return "blocked";
 
-  // expired — check grace period (3 days)
-  if (sub.end_date) {
-    const endDate = new Date(sub.end_date);
-    const graceEnd = new Date(endDate);
-    graceEnd.setDate(graceEnd.getDate() + 3);
-    const now = new Date();
+  // Rule 2: dealer roles without a dealer_id are blocked
+  if (isDealerRole && !dealerId) return "blocked";
 
-    if (now <= graceEnd) return "grace";
+  // Rule 3: apply subscription logic for dealer roles
+  if (isDealerRole) {
+    if (!sub) return "blocked";
+    if (sub.status === "active") return "full";
+    if (sub.status === "suspended") return "blocked";
+
+    // expired — check 3-day grace period
+    if (sub.end_date) {
+      const graceEnd = new Date(sub.end_date);
+      graceEnd.setDate(graceEnd.getDate() + 3);
+      if (new Date() <= graceEnd) return "grace";
+    }
+
+    return "readonly";
   }
 
-  return "readonly";
+  // Rule 4: any other authenticated role gets full access
+  return "full";
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -72,15 +98,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<UserRole[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
-  // Store raw loaded roles to compute access level synchronously before render
+
+  // Keep a ref of loaded roles so we can compute access synchronously
+  // inside loadUserData before React re-renders.
   const loadedRolesRef = useRef<UserRole[]>([]);
 
   const isSuperAdmin = roles.some((r) => r.role === "super_admin");
   const isDealerAdmin = roles.some((r) => r.role === "dealer_admin");
-  // Super admins always get full access regardless of subscription state
-  const accessLevel = computeAccessLevel(subscription, isSuperAdmin);
+  const accessLevel = computeAccessLevel(subscription, roles, profile?.dealer_id ?? null);
 
   async function loadUserData(userId: string) {
+    // Fetch profile and roles in parallel
     const [profileRes, rolesRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).single(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
@@ -88,17 +116,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const prof = profileRes.data as Profile | null;
     const fetchedRoles = (rolesRes.data as UserRole[]) ?? [];
-    
-    // Store in ref so we can check synchronously
+
+    // Persist in ref for synchronous checks below
     loadedRolesRef.current = fetchedRoles;
-    
+
+    const userIsSuperAdmin = fetchedRoles.some((r) => r.role === "super_admin");
+    const userIsDealerRole = fetchedRoles.some(
+      (r) => r.role === "dealer_admin" || r.role === "salesman"
+    );
+
+    // Set profile & roles together so the first render after loading
+    // already has the correct role context.
     setProfile(prof);
     setRoles(fetchedRoles);
 
-    const userIsSuperAdmin = fetchedRoles.some((r) => r.role === "super_admin");
-
-    // Load subscription only for dealers (super admins have no dealer_id)
-    if (prof?.dealer_id && !userIsSuperAdmin) {
+    // Only fetch subscription for dealer roles that have a dealer_id.
+    // Super admins never need a subscription check.
+    if (userIsDealerRole && !userIsSuperAdmin && prof?.dealer_id) {
       const { data: sub } = await supabase
         .from("subscriptions")
         .select("*")
@@ -109,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setSubscription(sub as Subscription | null);
 
-      // Fire-and-forget status check — never awaited so it can't stall or block login
+      // Fire-and-forget background status refresh — never blocks login
       if (sub) {
         supabase.functions
           .invoke("check-subscription-status", { body: { dealer_id: prof.dealer_id } })
@@ -125,16 +159,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (refreshed) setSubscription(refreshed as Subscription);
               })
           )
-          .catch(() => { /* never block login on error */ });
+          .catch(() => { /* never block login on background errors */ });
       }
     } else {
+      // super_admin or user with no dealer role — no subscription needed
       setSubscription(null);
     }
   }
 
   useEffect(() => {
     let isMounted = true;
-    let initialized = false;
 
     const initialize = async () => {
       try {
@@ -150,10 +184,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error("Auth init error:", err);
       } finally {
-        if (isMounted) {
-          initialized = true;
-          setLoading(false);
-        }
+        // Only clear loading after ALL data (profile, roles, subscription) is set.
+        // This prevents ProtectedRoute from evaluating with stale/empty state.
+        if (isMounted) setLoading(false);
       }
     };
 
@@ -171,11 +204,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTimeout(async () => {
             if (!isMounted) return;
             await loadUserData(session.user.id);
+            if (isMounted) setLoading(false);
           }, 0);
         } else {
           setProfile(null);
           setRoles([]);
           setSubscription(null);
+          setLoading(false);
         }
       }
     );
