@@ -32,6 +32,7 @@ import SAPlansPage from "./pages/super-admin/SAPlansPage";
 import SASubscriptionsPage from "./pages/super-admin/SASubscriptionsPage";
 import SARevenuePage from "./pages/super-admin/SARevenuePage";
 import SASystemPage from "./pages/super-admin/SASystemPage";
+import SASubscriptionStatusPage from "./pages/super-admin/SASubscriptionStatusPage";
 
 const IS_PRODUCTION = import.meta.env.PROD;
 
@@ -71,6 +72,7 @@ const App = () => (
               <Route path="dealers" element={<SADealersPage />} />
               <Route path="plans" element={<SAPlansPage />} />
               <Route path="subscriptions" element={<SASubscriptionsPage />} />
+              <Route path="subscription-status" element={<SASubscriptionStatusPage />} />
               <Route path="revenue" element={<SARevenuePage />} />
               <Route path="system" element={<SASystemPage />} />
             </Route>
