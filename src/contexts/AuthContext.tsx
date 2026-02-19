@@ -110,21 +110,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (session?.user) {
           // Use setTimeout to avoid Supabase deadlock with auth state
-          setTimeout(() => loadUserData(session.user.id), 0);
+          setTimeout(async () => {
+            await loadUserData(session.user.id);
+            setLoading(false);
+          }, 0);
         } else {
           setProfile(null);
           setRoles([]);
           setSubscription(null);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        loadUserData(session.user.id);
+        await loadUserData(session.user.id);
       }
       setLoading(false);
     });
