@@ -23,7 +23,15 @@ import SalesReturnsPage from "./pages/sales-returns/SalesReturnsPage";
 import CreateSalesReturn from "./pages/sales-returns/CreateSalesReturn";
 import LedgerPage from "./pages/ledger/LedgerPage";
 import ReportsPage from "./pages/reports/ReportsPage";
-import AdminPage from "./pages/admin/AdminPage";
+
+// Super Admin
+import SuperAdminLayout from "./pages/super-admin/SuperAdminLayout";
+import SADashboardPage from "./pages/super-admin/SADashboardPage";
+import SADealersPage from "./pages/super-admin/SADealersPage";
+import SAPlansPage from "./pages/super-admin/SAPlansPage";
+import SASubscriptionsPage from "./pages/super-admin/SASubscriptionsPage";
+import SARevenuePage from "./pages/super-admin/SARevenuePage";
+import SASystemPage from "./pages/super-admin/SASystemPage";
 
 const IS_PRODUCTION = import.meta.env.PROD;
 
@@ -57,6 +65,16 @@ const App = () => (
             <Route path="/login" element={<LoginPage />} />
             <Route path="/subscription-blocked" element={<SubscriptionBlockedPage />} />
 
+            {/* Super Admin Panel — role guard inside layout */}
+            <Route path="/super-admin" element={<SuperAdminLayout />}>
+              <Route index element={<SADashboardPage />} />
+              <Route path="dealers" element={<SADealersPage />} />
+              <Route path="plans" element={<SAPlansPage />} />
+              <Route path="subscriptions" element={<SASubscriptionsPage />} />
+              <Route path="revenue" element={<SARevenuePage />} />
+              <Route path="system" element={<SASystemPage />} />
+            </Route>
+
             {/* Dashboard + Reports: allowed in readonly */}
             <Route path="/" element={<ProtectedRoute allowReadonly><AppLayout><Index /></AppLayout></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute allowReadonly><AppLayout><ReportsPage /></AppLayout></ProtectedRoute>} />
@@ -74,9 +92,6 @@ const App = () => (
             <Route path="/sales-returns" element={<ProtectedRoute><AppLayout><SalesReturnsPage /></AppLayout></ProtectedRoute>} />
             <Route path="/sales-returns/new" element={<ProtectedRoute><AppLayout><CreateSalesReturn /></AppLayout></ProtectedRoute>} />
             <Route path="/ledger" element={<ProtectedRoute><AppLayout><LedgerPage /></AppLayout></ProtectedRoute>} />
-
-            {/* Admin (super_admin only — access check inside component) */}
-            <Route path="/admin" element={<ProtectedRoute><AppLayout><AdminPage /></AppLayout></ProtectedRoute>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
