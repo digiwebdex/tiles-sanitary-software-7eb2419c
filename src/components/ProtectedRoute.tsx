@@ -1,6 +1,6 @@
 import { ReactNode, useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth, AccessLevel } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
 interface ProtectedRouteProps {
@@ -13,7 +13,7 @@ const ProtectedRoute = ({ children, allowReadonly = false }: ProtectedRouteProps
   const { user, loading, accessLevel, profile, isSuperAdmin } = useAuth();
   const location = useLocation();
 
-  // Log expired-subscription access attempts
+  // Audit log for non-super-admin restricted access attempts
   useEffect(() => {
     if (
       !loading &&
@@ -24,24 +24,23 @@ const ProtectedRoute = ({ children, allowReadonly = false }: ProtectedRouteProps
     ) {
       supabase
         .from("audit_logs")
-        .insert([
-          {
-            dealer_id: profile?.dealer_id ?? null,
-            user_id: user.id,
-            action: "EXPIRED_SUBSCRIPTION_ACCESS",
-            table_name: "route_guard",
-            record_id: location.pathname,
-            new_data: {
-              access_level: accessLevel,
-              path: location.pathname,
-              timestamp: new Date().toISOString(),
-            } as any,
-          },
-        ])
+        .insert([{
+          dealer_id: profile?.dealer_id ?? null,
+          user_id: user.id,
+          action: "EXPIRED_SUBSCRIPTION_ACCESS",
+          table_name: "route_guard",
+          record_id: location.pathname,
+          new_data: {
+            access_level: accessLevel,
+            path: location.pathname,
+            timestamp: new Date().toISOString(),
+          } as any,
+        }])
         .then(() => {});
     }
   }, [loading, user, accessLevel, allowReadonly, location.pathname, isSuperAdmin]);
 
+  // 1. Wait until profile, roles, and subscription are all loaded
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -50,21 +49,21 @@ const ProtectedRoute = ({ children, allowReadonly = false }: ProtectedRouteProps
     );
   }
 
+  // 2. Unauthenticated → login
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // Super admins always have full access — never redirect them
+  // 3. super_admin → always full access, never check subscription
   if (isSuperAdmin) {
     return <>{children}</>;
   }
 
-  // Blocked = no subscription at all
+  // 4. dealer_admin / salesman subscription enforcement
   if (accessLevel === "blocked") {
     return <Navigate to="/subscription-blocked" replace />;
   }
 
-  // Read-only mode: only allow readonly-permitted routes
   if (accessLevel === "readonly" && !allowReadonly) {
     return <Navigate to="/" replace />;
   }
