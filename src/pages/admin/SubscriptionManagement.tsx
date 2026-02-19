@@ -37,7 +37,14 @@ const GRACE_DAYS = 3;
 
 function getDisplayStatus(sub: SubRow) {
   if (sub.status === "suspended") return "suspended";
-  if (sub.status === "active") return "active";
+  if (sub.status === "active") {
+    // Check if expiring within 7 days
+    if (sub.end_date) {
+      const daysLeft = differenceInDays(parseISO(sub.end_date), new Date());
+      if (daysLeft >= 0 && daysLeft <= 7) return "expiring_soon";
+    }
+    return "active";
+  }
   if (sub.status === "expired" && sub.end_date) {
     const daysSinceExpiry = differenceInDays(new Date(), parseISO(sub.end_date));
     if (daysSinceExpiry <= GRACE_DAYS) return "grace";
@@ -56,6 +63,7 @@ function getDaysRemaining(sub: SubRow) {
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { variant: "default" | "destructive" | "secondary" | "outline"; className: string }> = {
     active: { variant: "default", className: "bg-green-600 hover:bg-green-700 text-white border-0" },
+    expiring_soon: { variant: "outline", className: "border-yellow-500 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400" },
     grace: { variant: "outline", className: "border-yellow-500 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400" },
     expired: { variant: "destructive", className: "" },
     suspended: { variant: "secondary", className: "" },
@@ -63,7 +71,7 @@ function StatusBadge({ status }: { status: string }) {
   const c = config[status] ?? config.expired;
   return (
     <Badge variant={c.variant} className={`capitalize text-xs ${c.className}`}>
-      {status === "grace" ? "Grace Period" : status}
+      {status === "grace" ? "Grace Period" : status === "expiring_soon" ? "Expiring Soon" : status}
     </Badge>
   );
 }
@@ -233,7 +241,7 @@ const SubscriptionManagement = () => {
 
   const getRowClass = (displayStatus: string) => {
     if (displayStatus === "expired") return "bg-destructive/5";
-    if (displayStatus === "grace") return "bg-yellow-500/5";
+    if (displayStatus === "grace" || displayStatus === "expiring_soon") return "bg-yellow-500/5";
     return "";
   };
 
