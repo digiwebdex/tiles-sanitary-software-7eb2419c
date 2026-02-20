@@ -5,6 +5,7 @@ import { logAudit } from "@/services/auditService";
 import { validateInput, createSaleServiceSchema } from "@/lib/validators";
 import { assertDealerId } from "@/lib/tenancy";
 import { rateLimits } from "@/lib/rateLimit";
+import { notificationService } from "@/services/notificationService";
 
 export interface SaleItemInput {
   product_id: string;
@@ -214,6 +215,17 @@ export const salesService = {
         total_amount: totalAmount,
         item_count: input.items.length,
       },
+    });
+
+    // Fire-and-forget: notify owner via SMS/Email
+    // Non-blocking — sale is already committed; notification failure must never surface to user
+    notificationService.notifySaleCreated(input.dealer_id, {
+      invoice_number: invoiceNumber,
+      customer_name: input.customer_id,
+      total_amount: totalAmount,
+      paid_amount: input.paid_amount,
+      due_amount: dueAmount,
+      sale_date: input.sale_date,
     });
 
     return sale;
