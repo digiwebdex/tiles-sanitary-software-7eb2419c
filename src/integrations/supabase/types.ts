@@ -1139,6 +1139,7 @@ export type Database = {
       }
       subscriptions: {
         Row: {
+          billing_cycle: string
           created_at: string
           dealer_id: string
           end_date: string | null
@@ -1146,8 +1147,10 @@ export type Database = {
           plan_id: string
           start_date: string
           status: Database["public"]["Enums"]["subscription_status"]
+          yearly_discount_applied: boolean
         }
         Insert: {
+          billing_cycle?: string
           created_at?: string
           dealer_id: string
           end_date?: string | null
@@ -1155,8 +1158,10 @@ export type Database = {
           plan_id: string
           start_date?: string
           status?: Database["public"]["Enums"]["subscription_status"]
+          yearly_discount_applied?: boolean
         }
         Update: {
+          billing_cycle?: string
           created_at?: string
           dealer_id?: string
           end_date?: string | null
@@ -1164,6 +1169,7 @@ export type Database = {
           plan_id?: string
           start_date?: string
           status?: Database["public"]["Enums"]["subscription_status"]
+          yearly_discount_applied?: boolean
         }
         Relationships: [
           {
