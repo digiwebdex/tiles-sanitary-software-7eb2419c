@@ -99,7 +99,7 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
       ownerOnly: true,
     },
     {
-      title: "Stock Value",
+      title: "Inventory Value",
       value: formatCurrency(data.totalStockValue),
       icon: Package,
       accent: "text-primary",

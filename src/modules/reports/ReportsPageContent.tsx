@@ -18,6 +18,8 @@ import {
   fetchRetailerSalesReport,
   fetchProductHistory,
   fetchAccountingSummary,
+  fetchInventoryAgingReport,
+  type InventoryAgingRow,
   REPORT_PAGE_SIZE,
 } from "@/services/reportService";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,6 +48,7 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
         <TabsList className="flex flex-wrap h-auto gap-1">
           <TabsTrigger value="stock">Stock (SKU)</TabsTrigger>
           <TabsTrigger value="brand-stock">Brand Stock</TabsTrigger>
+          <TabsTrigger value="inventory">Inventory</TabsTrigger>
           <TabsTrigger value="sales">Sales</TabsTrigger>
           <TabsTrigger value="retailer">Retailer Sales</TabsTrigger>
           <TabsTrigger value="product-history">Product History</TabsTrigger>
@@ -54,6 +57,7 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
 
         <TabsContent value="stock"><StockReport dealerId={dealerId} /></TabsContent>
         <TabsContent value="brand-stock"><BrandStockReport dealerId={dealerId} /></TabsContent>
+        <TabsContent value="inventory"><InventoryAgingReport dealerId={dealerId} /></TabsContent>
         <TabsContent value="sales"><SalesReport dealerId={dealerId} /></TabsContent>
         <TabsContent value="retailer"><RetailerSalesReport dealerId={dealerId} /></TabsContent>
         <TabsContent value="product-history"><ProductHistoryReport dealerId={dealerId} /></TabsContent>
@@ -499,6 +503,144 @@ function AccountingSummaryReport({ dealerId }: { dealerId: string }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Inventory Valuation + Aging Report ──────────────────
+const AGING_META: Record<InventoryAgingRow["agingCategory"], { label: string; variant: "default" | "secondary" | "outline" | "destructive"; rowClass: string }> = {
+  fast:   { label: "Fast Moving",  variant: "default",     rowClass: "" },
+  normal: { label: "Normal",       variant: "secondary",   rowClass: "" },
+  slow:   { label: "Slow / Dead",  variant: "destructive", rowClass: "bg-destructive/5" },
+  unsold: { label: "Never Sold",   variant: "destructive", rowClass: "bg-destructive/10" },
+};
+
+function InventoryAgingReport({ dealerId }: { dealerId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["report-inventory-aging", dealerId],
+    queryFn: () => fetchInventoryAgingReport(dealerId),
+    enabled: !!dealerId,
+  });
+
+  const rows = data?.rows ?? [];
+  const totalFifoValue = data?.totalFifoValue ?? 0;
+
+  const summary = {
+    fast:   rows.filter((r) => r.agingCategory === "fast").length,
+    normal: rows.filter((r) => r.agingCategory === "normal").length,
+    slow:   rows.filter((r) => r.agingCategory === "slow" || r.agingCategory === "unsold").length,
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Total FIFO Value</p>
+            <p className="text-xl font-bold text-primary">{formatCurrency(totalFifoValue)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Fast Moving (≤30d)</p>
+            <p className="text-xl font-bold text-primary">{summary.fast} SKUs</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Normal (31–90d)</p>
+            <p className="text-xl font-bold">{summary.normal} SKUs</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Dead Stock (90d+)</p>
+            <p className={`text-xl font-bold ${summary.slow > 0 ? "text-destructive" : "text-primary"}`}>{summary.slow} SKUs</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Inventory Valuation &amp; Aging (FIFO)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="text-muted-foreground">Loading…</p>
+          ) : rows.length === 0 ? (
+            <p className="text-muted-foreground">No in-stock products found.</p>
+          ) : (
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Avail. Box</TableHead>
+                    <TableHead className="text-right">Avail. SFT</TableHead>
+                    <TableHead className="text-right">Avail. Pcs</TableHead>
+                    <TableHead className="text-right">Avg Rate</TableHead>
+                    <TableHead className="text-right">FIFO Value</TableHead>
+                    <TableHead className="text-right">Last Sale</TableHead>
+                    <TableHead>Aging</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((r) => {
+                    const meta = AGING_META[r.agingCategory];
+                    return (
+                      <TableRow key={r.productId} className={meta.rowClass}>
+                        <TableCell className="font-mono text-sm">{r.sku}</TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{r.name}</p>
+                            {r.brand && <p className="text-xs text-muted-foreground">{r.brand}</p>}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize text-xs">{r.category}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {r.unitType === "box_sft" ? r.boxQty : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {r.unitType === "box_sft" ? r.sftQty.toFixed(2) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {r.unitType === "piece" ? r.pieceQty : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">{formatCurrency(r.avgCostPerUnit)}</TableCell>
+                        <TableCell className="text-right font-semibold text-primary">
+                          {formatCurrency(r.fifoStockValue)}
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">
+                          {r.lastSaleDate
+                            ? `${r.lastSaleDate} (${r.daysSinceLastSale}d)`
+                            : <span className="text-destructive font-medium">Never</span>
+                          }
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={meta.variant} className="text-xs whitespace-nowrap">
+                            {meta.label}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {/* Totals row */}
+                  <TableRow className="bg-muted/50 font-semibold">
+                    <TableCell colSpan={7}>Total</TableCell>
+                    <TableCell className="text-right text-primary">{formatCurrency(totalFifoValue)}</TableCell>
+                    <TableCell colSpan={2} />
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
