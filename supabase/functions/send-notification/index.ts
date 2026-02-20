@@ -13,43 +13,113 @@ interface NotificationRequest {
   channel: "sms" | "email";
   type: "sale_created" | "daily_summary";
   payload: Record<string, unknown>;
-  recipient: string; // phone for sms, email for email
+  recipient: string;
 }
+
+// ─── SMTP helpers ────────────────────────────────────────────────────────────
+
+const enc = (s: string) => new TextEncoder().encode(s + "\r\n");
+const dec = (b: Uint8Array) => new TextDecoder().decode(b);
+const b64 = (s: string) => btoa(unescape(encodeURIComponent(s)));
+
+async function readSmtpResponse(conn: Deno.Conn | Deno.TlsConn): Promise<string> {
+  const buf = new Uint8Array(4096);
+  let result = "";
+  while (true) {
+    const n = await conn.read(buf);
+    if (n === null) break;
+    result += dec(buf.subarray(0, n));
+    if (result.includes("\r\n")) break;
+  }
+  return result.trim();
+}
+
+async function smtpCmd(conn: Deno.Conn | Deno.TlsConn, line: string): Promise<string> {
+  await conn.write(enc(line));
+  return await readSmtpResponse(conn);
+}
+
+async function sendSmtpEmail(opts: {
+  from: string; to: string; subject: string; body: string;
+}): Promise<void> {
+  const host = Deno.env.get("SMTP_HOST");
+  const port = parseInt(Deno.env.get("SMTP_PORT") || "587");
+  const user = Deno.env.get("SMTP_USER");
+  const pass = Deno.env.get("SMTP_PASS");
+  const from = Deno.env.get("SMTP_FROM") || user;
+
+  if (!host || !user || !pass) throw new Error("SMTP credentials not configured");
+
+  const emailPayload =
+    `From: ${from}\r\nTo: ${opts.to}\r\nSubject: ${opts.subject}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${opts.body}\r\n.`;
+
+  if (port === 465) {
+    const conn = await Deno.connectTls({ hostname: host, port });
+    try {
+      await readSmtpResponse(conn);
+      await smtpCmd(conn, `EHLO ${host}`);
+      await smtpCmd(conn, "AUTH LOGIN");
+      await smtpCmd(conn, b64(user!));
+      const authResp = await smtpCmd(conn, b64(pass));
+      if (!authResp.startsWith("235")) throw new Error(`SMTP AUTH failed: ${authResp}`);
+      const mf = await smtpCmd(conn, `MAIL FROM:<${from}>`);
+      if (!mf.startsWith("250")) throw new Error(`MAIL FROM failed: ${mf}`);
+      const rt = await smtpCmd(conn, `RCPT TO:<${opts.to}>`);
+      if (!rt.startsWith("250")) throw new Error(`RCPT TO failed: ${rt}`);
+      await smtpCmd(conn, "DATA");
+      await smtpCmd(conn, emailPayload);
+      await smtpCmd(conn, "QUIT");
+    } finally {
+      conn.close();
+    }
+  } else {
+    // STARTTLS
+    const plain = await Deno.connect({ hostname: host, port });
+    await readSmtpResponse(plain);
+    await plain.write(enc(`EHLO ${host}`));
+    await readSmtpResponse(plain);
+    const stResp = await smtpCmd(plain, "STARTTLS");
+    if (!stResp.startsWith("220")) { plain.close(); throw new Error(`STARTTLS failed: ${stResp}`); }
+    const tls = await Deno.startTls(plain, { hostname: host });
+    try {
+      await smtpCmd(tls, `EHLO ${host}`);
+      await smtpCmd(tls, "AUTH LOGIN");
+      await smtpCmd(tls, b64(user!));
+      const authResp = await smtpCmd(tls, b64(pass));
+      if (!authResp.startsWith("235")) throw new Error(`SMTP AUTH failed: ${authResp}`);
+      const mf = await smtpCmd(tls, `MAIL FROM:<${from}>`);
+      if (!mf.startsWith("250")) throw new Error(`MAIL FROM failed: ${mf}`);
+      const rt = await smtpCmd(tls, `RCPT TO:<${opts.to}>`);
+      if (!rt.startsWith("250")) throw new Error(`RCPT TO failed: ${rt}`);
+      await smtpCmd(tls, "DATA");
+      await smtpCmd(tls, emailPayload);
+      await smtpCmd(tls, "QUIT");
+    } finally {
+      tls.close();
+    }
+  }
+}
+
+// ─── SMS via BulkSMSBD ───────────────────────────────────────────────────────
 
 async function sendSMS(phone: string, message: string): Promise<{ success: boolean; response?: unknown; error?: string }> {
   const apiKey = Deno.env.get("BULKSMSBD_API_KEY");
   const apiUrl = Deno.env.get("BULKSMSBD_API_URL") ?? "http://bulksmsbd.net/api/smsapi";
   const senderId = Deno.env.get("BULKSMSBD_SENDER_ID");
 
-  if (!apiKey || !senderId) {
-    return { success: false, error: "SMS credentials not configured" };
-  }
+  if (!apiKey || !senderId) return { success: false, error: "SMS credentials not configured" };
 
-  // Sanitize phone: strip non-digits, ensure BD format
   const cleanPhone = phone.replace(/\D/g, "");
-
-  const params = new URLSearchParams({
-    api_key: apiKey,
-    type: "text",
-    number: cleanPhone,
-    senderid: senderId,
-    message,
-  });
+  const params = new URLSearchParams({ api_key: apiKey, type: "text", number: cleanPhone, senderid: senderId, message });
 
   try {
     const res = await fetch(`${apiUrl}?${params.toString()}`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
-
     const responseText = await res.text();
     console.log("[SMS] BulkSMSBD response:", responseText);
-
-    // BulkSMSBD returns 1701 for success
-    if (responseText.includes("1701") || res.ok) {
-      return { success: true, response: responseText };
-    }
-
+    if (responseText.includes("1701") || res.ok) return { success: true, response: responseText };
     return { success: false, error: `BulkSMSBD error: ${responseText}` };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -58,19 +128,18 @@ async function sendSMS(phone: string, message: string): Promise<{ success: boole
   }
 }
 
-function buildSaleMessage(payload: Record<string, unknown>, recipient: string, ownerPhone: string | undefined): string {
+// ─── Message builders ────────────────────────────────────────────────────────
+
+function buildSaleMessage(payload: Record<string, unknown>, recipient: string): string {
   const inv = payload.invoice_number ?? "N/A";
   const customer = payload.customer_name ?? "Customer";
   const amount = payload.total_amount ?? 0;
   const paid = payload.paid_amount ?? 0;
   const due = payload.due_amount ?? 0;
   const customerPhone = (payload.customer_phone as string | null) ?? null;
-
-  // If this SMS is going to the customer (not the owner), use a customer-friendly message
   if (customerPhone && recipient === customerPhone) {
     return `Dear ${customer},\nThank you for your purchase!\nInvoice: ${inv}\nAmount: ${amount} BDT\nPaid: ${paid} BDT\nDue: ${due} BDT`;
   }
-  // Owner alert
   return `Sale Alert!\nInvoice: ${inv}\nCustomer: ${customer}\nAmount: ${amount} BDT\nPaid: ${paid} BDT\nDue: ${due} BDT`;
 }
 
@@ -82,19 +151,36 @@ function buildDailySummaryMessage(payload: Record<string, unknown>): string {
   return `Daily Summary (${date})\nTotal Sales: ${sales}\nRevenue: ${revenue} BDT\nProfit: ${profit} BDT`;
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+function buildEmailSubjectAndBody(
+  type: string,
+  payload: Record<string, unknown>,
+  recipient: string,
+): { subject: string; body: string } {
+  if (type === "sale_created") {
+    const msg = buildSaleMessage(payload, recipient);
+    const inv = payload.invoice_number ?? "N/A";
+    return { subject: `Invoice ${inv} - Sale Confirmation`, body: msg };
   }
+  if (type === "daily_summary") {
+    const date = payload.date ?? new Date().toISOString().split("T")[0];
+    return { subject: `Daily Business Summary - ${date}`, body: buildDailySummaryMessage(payload) };
+  }
+  return { subject: "Notification", body: JSON.stringify(payload) };
+}
+
+// ─── Main handler ─────────────────────────────────────────────────────────────
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const serviceClient = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
   try {
     const body: NotificationRequest = await req.json();
-    const { notification_id, channel, type, payload, recipient } = body;
+    const { notification_id, dealer_id, channel, type, payload, recipient } = body;
 
     if (!notification_id || !channel || !type || !recipient) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -103,32 +189,67 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── Check dealer's plan allows this channel ──────────────────────────────
+    const { data: subData } = await serviceClient
+      .from("subscriptions")
+      .select("plan_id, subscription_plans!inner(sms_enabled, email_enabled, daily_summary_enabled)")
+      .eq("dealer_id", dealer_id)
+      .eq("status", "active")
+      .order("start_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const plan = (subData as any)?.subscription_plans ?? null;
+    if (plan) {
+      if (channel === "sms" && !plan.sms_enabled) {
+        console.log(`[Notification] SMS blocked — plan does not include SMS for dealer ${dealer_id}`);
+        await serviceClient.from("notifications").update({ status: "skipped", error_message: "Plan does not include SMS" }).eq("id", notification_id);
+        return new Response(JSON.stringify({ success: false, error: "Plan does not include SMS" }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (channel === "email" && !plan.email_enabled) {
+        console.log(`[Notification] Email blocked — plan does not include Email for dealer ${dealer_id}`);
+        await serviceClient.from("notifications").update({ status: "skipped", error_message: "Plan does not include Email" }).eq("id", notification_id);
+        return new Response(JSON.stringify({ success: false, error: "Plan does not include Email" }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (type === "daily_summary" && !plan.daily_summary_enabled) {
+        console.log(`[Notification] Daily summary blocked — plan does not include it for dealer ${dealer_id}`);
+        await serviceClient.from("notifications").update({ status: "skipped", error_message: "Plan does not include daily summary" }).eq("id", notification_id);
+        return new Response(JSON.stringify({ success: false, error: "Plan does not include daily summary" }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     console.log(`[Notification] Processing ${type} via ${channel} → ${recipient}`);
 
     let success = false;
     let errorMessage: string | undefined;
 
     if (channel === "sms") {
-      // Build message based on type
       let message = "";
-      if (type === "sale_created") {
-        const ownerPhone = (payload.owner_phone as string | undefined);
-        message = buildSaleMessage(payload, recipient, ownerPhone);
-      } else if (type === "daily_summary") {
-        message = buildDailySummaryMessage(payload);
-      } else {
-        message = JSON.stringify(payload);
-      }
+      if (type === "sale_created") message = buildSaleMessage(payload, recipient);
+      else if (type === "daily_summary") message = buildDailySummaryMessage(payload);
+      else message = JSON.stringify(payload);
 
       const result = await sendSMS(recipient, message);
       success = result.success;
       errorMessage = result.error;
-
       console.log(`[SMS] Result for ${notification_id}:`, success ? "sent" : errorMessage);
-    } else {
-      // Email: placeholder — extend with Resend/SMTP later
-      console.log("[Email] Email channel not yet configured, skipping.");
-      errorMessage = "Email channel not configured";
+
+    } else if (channel === "email") {
+      const { subject, body: emailBody } = buildEmailSubjectAndBody(type, payload, recipient);
+      try {
+        await sendSmtpEmail({ from: Deno.env.get("SMTP_FROM") || Deno.env.get("SMTP_USER") || "", to: recipient, subject, body: emailBody });
+        success = true;
+        console.log(`[Email] Sent to ${recipient} for notification ${notification_id}`);
+      } catch (err) {
+        errorMessage = err instanceof Error ? err.message : String(err);
+        console.error(`[Email] Failed for ${notification_id}:`, errorMessage);
+      }
     }
 
     // Update notification record
@@ -136,32 +257,23 @@ Deno.serve(async (req) => {
       status: success ? "sent" : "failed",
       error_message: errorMessage ?? null,
     };
-    if (success) {
-      updateData.sent_at = new Date().toISOString();
-    } else {
-      // Increment retry count on failure
-      updateData.retry_count = (payload.retry_count as number ?? 0) + 1;
-    }
+    if (success) updateData.sent_at = new Date().toISOString();
+    else updateData.retry_count = ((payload.retry_count as number) ?? 0) + 1;
 
-    const { error: updateErr } = await serviceClient
-      .from("notifications")
-      .update(updateData)
-      .eq("id", notification_id);
-
-    if (updateErr) {
-      console.error("[Notification] Failed to update status:", updateErr.message);
-    }
+    const { error: updateErr } = await serviceClient.from("notifications").update(updateData).eq("id", notification_id);
+    if (updateErr) console.error("[Notification] Failed to update status:", updateErr.message);
 
     return new Response(
       JSON.stringify({ success, error: errorMessage }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
+
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[Notification] Unexpected error:", msg);
     return new Response(
       JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
