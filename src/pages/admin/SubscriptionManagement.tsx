@@ -19,8 +19,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { recordSubscriptionPayment } from "@/services/subscriptionPaymentService";
-import { Plus, CalendarPlus, Play, Pause, RefreshCw, Banknote } from "lucide-react";
+import { Plus, CalendarPlus, Play, Pause, RefreshCw, Banknote, AlertCircle, CheckCircle2 } from "lucide-react";
 import { differenceInDays, parseISO, format } from "date-fns";
+import { checkYearlyDiscountEligibility } from "@/services/subscriptionPaymentService";
 
 interface SubRow {
   id: string;
@@ -144,26 +145,37 @@ const SubscriptionManagement = () => {
   // Payment dialog
   const [payOpen, setPayOpen] = useState(false);
   const [paySub, setPaySub] = useState<SubRow | null>(null);
+  const [payDiscountEligible, setPayDiscountEligible] = useState<boolean | null>(null);
   const [payForm, setPayForm] = useState({
     amount: "",
     payment_date: format(new Date(), "yyyy-MM-dd"),
     payment_method: "cash" as "cash" | "bank" | "mobile_banking",
     payment_status: "paid" as "paid" | "partial" | "pending",
+    billing_cycle: "monthly" as "monthly" | "yearly",
     extend_months: "1",
     note: "",
   });
 
-  const openPayment = (sub: SubRow) => {
+  const openPayment = async (sub: SubRow) => {
     setPaySub(sub);
+    setPayDiscountEligible(null);
     setPayForm({
       amount: "",
       payment_date: format(new Date(), "yyyy-MM-dd"),
       payment_method: "cash",
       payment_status: "paid",
+      billing_cycle: "monthly",
       extend_months: "1",
       note: "",
     });
     setPayOpen(true);
+    // Load discount eligibility in background
+    try {
+      const eligible = await checkYearlyDiscountEligibility(sub.dealer_id);
+      setPayDiscountEligible(eligible);
+    } catch {
+      setPayDiscountEligible(null);
+    }
   };
 
   const paymentMutation = useMutation({
@@ -179,6 +191,7 @@ const SubscriptionManagement = () => {
         payment_status: payForm.payment_status,
         collected_by: user.id,
         note: payForm.note || undefined,
+        billing_cycle: payForm.billing_cycle,
         extend_months: payForm.payment_status === "paid" ? Number(payForm.extend_months) || 1 : undefined,
       });
     },
@@ -414,6 +427,65 @@ const SubscriptionManagement = () => {
             <DialogTitle>Record Payment — {paySub?.dealers?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+
+            {/* Payment Status first so billing cycle only shows for full payment */}
+            <div className="space-y-2">
+              <Label>Payment Status *</Label>
+              <Select
+                value={payForm.payment_status}
+                onValueChange={(v: "paid" | "partial" | "pending") =>
+                  setPayForm({ ...payForm, payment_status: v })
+                }
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="paid">Paid (Full)</SelectItem>
+                  <SelectItem value="partial">Partial</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Billing cycle + discount eligibility — only for full payment */}
+            {payForm.payment_status === "paid" && (
+              <div className="space-y-2">
+                <Label>Billing Cycle *</Label>
+                <Select
+                  value={payForm.billing_cycle}
+                  onValueChange={(v: "monthly" | "yearly") =>
+                    setPayForm({ ...payForm, billing_cycle: v, extend_months: v === "yearly" ? "12" : "1" })
+                  }
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="yearly">Yearly (12 months)</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Yearly discount eligibility banner */}
+                {payForm.billing_cycle === "yearly" && payDiscountEligible !== null && (
+                  payDiscountEligible ? (
+                    <div className="flex items-start gap-2 rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm">
+                      <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-green-600" />
+                      <div className="text-green-700 dark:text-green-400">
+                        <p className="font-semibold">30% First-Year Discount Eligible</p>
+                        <p className="text-xs opacity-80 mt-0.5">First yearly renewal — enter the discounted yearly price (30% off).</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm">
+                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-yellow-600" />
+                      <div className="text-yellow-700 dark:text-yellow-400">
+                        <p className="font-semibold">No Discount — Full Yearly Price Applies</p>
+                        <p className="text-xs opacity-80 mt-0.5">Dealer already used the 30% first-year discount. Charge full price (monthly rate × 12).</p>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Amount (৳) *</Label>
@@ -434,47 +506,31 @@ const SubscriptionManagement = () => {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Payment Method *</Label>
-                <Select
-                  value={payForm.payment_method}
-                  onValueChange={(v: "cash" | "bank" | "mobile_banking") =>
-                    setPayForm({ ...payForm, payment_method: v })
-                  }
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="bank">Bank</SelectItem>
-                    <SelectItem value="mobile_banking">Mobile Banking</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Payment Status *</Label>
-                <Select
-                  value={payForm.payment_status}
-                  onValueChange={(v: "paid" | "partial" | "pending") =>
-                    setPayForm({ ...payForm, payment_status: v })
-                  }
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="paid">Paid (Full)</SelectItem>
-                    <SelectItem value="partial">Partial</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
+            <div className="space-y-2">
+              <Label>Payment Method *</Label>
+              <Select
+                value={payForm.payment_method}
+                onValueChange={(v: "cash" | "bank" | "mobile_banking") =>
+                  setPayForm({ ...payForm, payment_method: v })
+                }
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="bank">Bank</SelectItem>
+                  <SelectItem value="mobile_banking">Mobile Banking</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
             {payForm.payment_status === "paid" && (
               <div className="space-y-2">
                 <Label>Extend subscription by (months)</Label>
                 <Input
                   type="number"
                   min="1"
-                  max="12"
+                  max="24"
                   value={payForm.extend_months}
                   onChange={(e) => setPayForm({ ...payForm, extend_months: e.target.value })}
                 />
@@ -483,6 +539,7 @@ const SubscriptionManagement = () => {
                 </p>
               </div>
             )}
+
             <div className="space-y-2">
               <Label>Note</Label>
               <Textarea

@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { addMonths, addYears, format } from "date-fns";
+import { addMonths, format } from "date-fns";
 
 interface RecordPaymentInput {
   subscription_id: string;
@@ -12,13 +12,16 @@ interface RecordPaymentInput {
   note?: string;
   /** Used to extend subscription on full payment */
   extend_months?: number;
+  /** Billing cycle for this renewal period */
+  billing_cycle?: "monthly" | "yearly";
 }
 
 /**
  * Records a subscription payment.
  * – Prevents duplicate full payments for the same subscription period.
  * – On full payment: extends subscription end_date and sets status = active.
- * – On partial: keeps status as-is (pending).
+ * – Yearly billing: 30% discount only applies on first yearly renewal per dealer.
+ *   Subsequent yearly renewals are charged at full price (monthly_price × 12).
  * – Logs the action in audit_logs.
  */
 export async function recordSubscriptionPayment(input: RecordPaymentInput) {
@@ -32,6 +35,7 @@ export async function recordSubscriptionPayment(input: RecordPaymentInput) {
     collected_by,
     note,
     extend_months = 1,
+    billing_cycle = "monthly",
   } = input;
 
   // 1. Duplicate check: prevent full payment if one already exists for this subscription
@@ -47,12 +51,29 @@ export async function recordSubscriptionPayment(input: RecordPaymentInput) {
 
     if (existing && existing.length > 0) {
       throw new Error(
-        "A full payment has already been recorded for this subscription period. Use 'Extend' or create a new subscription instead."
+        "A full payment has already been recorded for this subscription period. Use 'Edit' to extend the end date or create a new subscription instead."
       );
     }
   }
 
-  // 2. Insert payment record
+  // 2. Determine if yearly discount is eligible
+  // Discount applies ONLY if dealer has NEVER had yearly_discount_applied = true before
+  let yearlyDiscountApplied = false;
+  if (billing_cycle === "yearly" && payment_status === "paid") {
+    const { data: prevYearly, error: prevErr } = await supabase
+      .from("subscriptions")
+      .select("id")
+      .eq("dealer_id", dealer_id)
+      .eq("yearly_discount_applied", true)
+      .limit(1);
+
+    if (prevErr) throw new Error(prevErr.message);
+
+    // No previous yearly discount found → first time, discount applies
+    yearlyDiscountApplied = !prevYearly || prevYearly.length === 0;
+  }
+
+  // 3. Insert payment record
   const { data: payment, error: insertError } = await supabase
     .from("subscription_payments")
     .insert({
@@ -70,9 +91,8 @@ export async function recordSubscriptionPayment(input: RecordPaymentInput) {
 
   if (insertError) throw new Error(insertError.message);
 
-  // 3. If full payment → extend subscription & activate
+  // 4. If full payment → extend subscription & activate
   if (payment_status === "paid") {
-    // Fetch current subscription to calculate new end date
     const { data: sub, error: subError } = await supabase
       .from("subscriptions")
       .select("end_date, start_date")
@@ -92,13 +112,15 @@ export async function recordSubscriptionPayment(input: RecordPaymentInput) {
       .update({
         end_date: newEndDate,
         status: "active" as any,
+        billing_cycle: billing_cycle as any,
+        yearly_discount_applied: yearlyDiscountApplied,
       })
       .eq("id", subscription_id);
 
     if (updateError) throw new Error(updateError.message);
   }
 
-  // 4. Audit log
+  // 5. Audit log
   await supabase.from("audit_logs").insert({
     dealer_id,
     user_id: collected_by,
@@ -111,9 +133,27 @@ export async function recordSubscriptionPayment(input: RecordPaymentInput) {
       payment_date,
       payment_method,
       payment_status,
+      billing_cycle,
+      yearly_discount_applied: yearlyDiscountApplied,
       note,
     } as any,
   });
 
-  return payment;
+  return { payment, yearlyDiscountApplied };
+}
+
+/**
+ * Check if a dealer is eligible for the 30% yearly discount.
+ * Returns true if they have NEVER received a yearly discount before.
+ */
+export async function checkYearlyDiscountEligibility(dealer_id: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("id")
+    .eq("dealer_id", dealer_id)
+    .eq("yearly_discount_applied", true)
+    .limit(1);
+
+  if (error) throw new Error(error.message);
+  return !data || data.length === 0;
 }
