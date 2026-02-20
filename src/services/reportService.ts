@@ -542,4 +542,184 @@ export async function fetchAccountingSummary(
   }));
 }
 
+// ─── Inventory Valuation + Aging Report (FIFO) ───────────
+export interface InventoryAgingRow {
+  productId: string;
+  sku: string;
+  name: string;
+  brand: string | null;
+  category: string;
+  unitType: string;
+  boxQty: number;
+  sftQty: number;
+  pieceQty: number;
+  avgCostPerUnit: number;
+  fifoStockValue: number;
+  lastSaleDate: string | null;
+  daysSinceLastSale: number | null;
+  agingCategory: "fast" | "normal" | "slow" | "unsold";
+}
+
+export async function fetchInventoryAgingReport(dealerId: string): Promise<{
+  rows: InventoryAgingRow[];
+  totalFifoValue: number;
+}> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Parallel fetch: products, stock, all purchase batches, all sale quantities
+  const [productsRes, stockRes, purchaseItemsRes, saleItemsRes] = await Promise.all([
+    supabase
+      .from("products")
+      .select("id, sku, name, brand, category, unit_type, per_box_sft, reorder_level")
+      .eq("dealer_id", dealerId)
+      .eq("active", true)
+      .order("sku"),
+
+    supabase
+      .from("stock")
+      .select("product_id, box_qty, sft_qty, piece_qty, average_cost_per_unit")
+      .eq("dealer_id", dealerId),
+
+    supabase
+      .from("purchase_items")
+      .select("product_id, quantity, purchase_rate, landed_cost, purchases(purchase_date)")
+      .eq("dealer_id", dealerId),
+
+    supabase
+      .from("sale_items")
+      .select("product_id, quantity, sales(sale_date)")
+      .eq("dealer_id", dealerId),
+  ]);
+
+  if (productsRes.error) throw new Error(productsRes.error.message);
+
+  const stockMap = new Map((stockRes.data ?? []).map((s) => [s.product_id, s]));
+
+  // Build per-product purchase batches sorted by purchase_date ASC (oldest first)
+  const purchaseBatchMap: Record<string, { qty: number; cost: number; date: string }[]> = {};
+  for (const item of purchaseItemsRes.data ?? []) {
+    const pid = item.product_id;
+    const date = (item as any).purchases?.purchase_date ?? "1970-01-01";
+    // Prefer landed_cost (fully loaded); fall back to purchase_rate
+    const cost = Number(item.landed_cost) > 0 ? Number(item.landed_cost) : Number(item.purchase_rate);
+    if (!purchaseBatchMap[pid]) purchaseBatchMap[pid] = [];
+    purchaseBatchMap[pid].push({ qty: Number(item.quantity), cost, date });
+  }
+  for (const pid of Object.keys(purchaseBatchMap)) {
+    purchaseBatchMap[pid].sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  // Build per-product: total sold quantity + latest sale date
+  const saleMap: Record<string, { totalSold: number; lastSaleDate: string | null }> = {};
+  for (const item of saleItemsRes.data ?? []) {
+    const pid = item.product_id;
+    const date = (item as any).sales?.sale_date ?? null;
+    if (!saleMap[pid]) saleMap[pid] = { totalSold: 0, lastSaleDate: null };
+    saleMap[pid].totalSold += Number(item.quantity);
+    if (date && (!saleMap[pid].lastSaleDate || date > saleMap[pid].lastSaleDate!)) {
+      saleMap[pid].lastSaleDate = date;
+    }
+  }
+
+  const rows: InventoryAgingRow[] = [];
+  let totalFifoValue = 0;
+
+  for (const product of productsRes.data ?? []) {
+    const stock = stockMap.get(product.id);
+    if (!stock) continue;
+
+    const boxQty = Number(stock.box_qty);
+    const sftQty = Number(stock.sft_qty);
+    const pieceQty = Number(stock.piece_qty);
+    const avgCostPerUnit = Number(stock.average_cost_per_unit);
+
+    // Base quantity (boxes for box_sft, pieces for piece)
+    const currentBaseQty = product.unit_type === "box_sft" ? boxQty : pieceQty;
+    if (currentBaseQty <= 0) continue;
+
+    // ── FIFO algorithm ──────────────────────────────────────
+    // FIFO: oldest purchases are consumed by sales first.
+    // Remaining stock = newest purchase batches.
+    const batches = purchaseBatchMap[product.id] ?? [];
+    let soldQty = saleMap[product.id]?.totalSold ?? 0;
+
+    // Walk through batches oldest→newest, deduct sold qty
+    const remainingBatches: { qty: number; cost: number }[] = [];
+    for (const batch of batches) {
+      if (soldQty <= 0) {
+        remainingBatches.push({ qty: batch.qty, cost: batch.cost });
+      } else if (soldQty >= batch.qty) {
+        soldQty -= batch.qty; // entire batch consumed
+      } else {
+        remainingBatches.push({ qty: batch.qty - soldQty, cost: batch.cost });
+        soldQty = 0;
+      }
+    }
+
+    // Value remaining stock from remaining FIFO layers (oldest → newest)
+    let fifoValue = 0;
+    let qtyToValue = currentBaseQty;
+    for (const batch of remainingBatches) {
+      if (qtyToValue <= 0) break;
+      const take = Math.min(batch.qty, qtyToValue);
+      fifoValue += take * batch.cost;
+      qtyToValue -= take;
+    }
+    // Fallback: if purchase history is incomplete, use weighted avg for remainder
+    if (qtyToValue > 0) {
+      fifoValue += qtyToValue * avgCostPerUnit;
+    }
+
+    // ── Aging classification ────────────────────────────────
+    const saleInfo = saleMap[product.id];
+    const lastSaleDate = saleInfo?.lastSaleDate ?? null;
+    let daysSinceLastSale: number | null = null;
+    if (lastSaleDate) {
+      const d = new Date(lastSaleDate);
+      daysSinceLastSale = Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    let agingCategory: InventoryAgingRow["agingCategory"];
+    if (daysSinceLastSale === null) {
+      agingCategory = "unsold";
+    } else if (daysSinceLastSale <= 30) {
+      agingCategory = "fast";
+    } else if (daysSinceLastSale <= 90) {
+      agingCategory = "normal";
+    } else {
+      agingCategory = "slow";
+    }
+
+    totalFifoValue += fifoValue;
+    rows.push({
+      productId: product.id,
+      sku: product.sku,
+      name: product.name,
+      brand: product.brand,
+      category: product.category,
+      unitType: product.unit_type,
+      boxQty,
+      sftQty,
+      pieceQty,
+      avgCostPerUnit,
+      fifoStockValue: round2(fifoValue),
+      lastSaleDate,
+      daysSinceLastSale,
+      agingCategory,
+    });
+  }
+
+  // Sort: dead/unsold first, then by FIFO value descending
+  const agingOrder: Record<InventoryAgingRow["agingCategory"], number> = {
+    unsold: 0, slow: 1, normal: 2, fast: 3,
+  };
+  rows.sort((a, b) => {
+    const d = agingOrder[a.agingCategory] - agingOrder[b.agingCategory];
+    return d !== 0 ? d : b.fifoStockValue - a.fifoStockValue;
+  });
+
+  return { rows, totalFifoValue: round2(totalFifoValue) };
+}
+
 export const REPORT_PAGE_SIZE = PAGE_SIZE;
