@@ -98,6 +98,7 @@ const PLANS = [
       { icon: Package,     text: "Inventory management" },
       { icon: BarChart2,   text: "Basic reports" },
       { icon: ShieldCheck, text: "Customer ledger" },
+      { icon: Mail,        text: "Email notifications" },
     ],
   },
   {
@@ -115,6 +116,8 @@ const PLANS = [
       { icon: TrendingUp,      text: "Advanced analytics" },
       { icon: GitBranch,       text: "Multi-branch ready" },
       { icon: HeadphonesIcon,  text: "Priority support" },
+      { icon: Mail,            text: "Email notifications" },
+      { icon: MessageCircle,   text: "SMS notifications" },
     ],
   },
 ];
@@ -125,8 +128,10 @@ const COMPARISON = [
   { feature: "Inventory Management", starter: true,  pro: true },
   { feature: "Basic Reports",        starter: true,  pro: true },
   { feature: "Customer Ledger",      starter: true,  pro: true },
+  { feature: "Email Notifications",  starter: true,  pro: true },
   { feature: "Advanced Analytics",   starter: false, pro: true },
   { feature: "Multi-Branch Ready",   starter: false, pro: true },
+  { feature: "SMS Notifications",    starter: false, pro: true },
   { feature: "Priority Support",     starter: false, pro: true },
 ];
 
