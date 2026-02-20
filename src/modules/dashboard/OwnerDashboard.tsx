@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/chart";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  PieChart, Pie, Cell, ResponsiveContainer,
+  PieChart, Pie, Cell,
 } from "recharts";
 import { TrendingUp, Package, AlertTriangle, Receipt, Banknote } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
@@ -165,7 +165,7 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
               <p className="text-muted-foreground text-sm">No data</p>
             ) : (
               <div className="w-full">
-                <ResponsiveContainer width="100%" height={250}>
+                <ChartContainer config={Object.fromEntries(data.categorySales.map((c, i) => [c.category, { label: c.category, color: PIE_COLORS[i % PIE_COLORS.length] }]))} className="h-[250px] w-full">
                   <PieChart>
                     <Pie
                       data={data.categorySales}
@@ -183,7 +183,7 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
                     </Pie>
                     <ChartTooltip content={<ChartTooltipContent nameKey="category" />} />
                   </PieChart>
-                </ResponsiveContainer>
+                </ChartContainer>
                 <div className="mt-2 flex flex-wrap gap-3 justify-center">
                   {data.categorySales.map((c, i) => (
                     <div key={c.category} className="flex items-center gap-1.5 text-xs">
