@@ -383,7 +383,7 @@ const PRICING_PLANS = [
   {
     name: "Pro",
     highlighted: true,
-    monthlyPrice: 1999,
+    monthlyPrice: 1500,
     yearlyPrice: 20000,
     features: ["Up to 5 users", "All Starter features", "Advanced analytics", "Multi-branch ready", "Priority support", "Email notifications", "SMS notifications"],
   },

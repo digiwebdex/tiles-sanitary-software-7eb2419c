@@ -108,7 +108,7 @@ const PLANS = [
     badge: "Most Popular",
     cta: "Get Started",
     ctaLink: "/get-started",
-    monthlyPrice: 1999,
+    monthlyPrice: 1500,
     yearlyPrice: 20000,
     features: [
       { icon: Users,           text: "Up to 5 users" },
