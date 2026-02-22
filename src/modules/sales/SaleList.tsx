@@ -107,12 +107,15 @@ const SaleList = ({ dealerId }: SaleListProps) => {
                       )}
                       <TableCell>
                         <div className="flex gap-1">
-                          {isChallan && s.sale_status !== "invoiced" ? (
-                            <Button size="icon" variant="ghost" onClick={() => navigate(`/sales/${s.id}/challan`)}>
+                          {/* Challan button: only for challan_mode + eligible statuses */}
+                          {isChallan && ["draft", "challan_created", "delivered", "partial_invoiced"].includes(s.sale_status) && (
+                            <Button size="icon" variant="ghost" onClick={() => navigate(`/sales/${s.id}/challan`)} title="View Challan">
                               <Truck className="h-4 w-4" />
                             </Button>
-                          ) : (
-                            <Button size="icon" variant="ghost" onClick={() => navigate(`/sales/${s.id}/invoice`)}>
+                          )}
+                          {/* Invoice button: for direct_invoice always, or challan_mode when fully invoiced */}
+                          {(!isChallan || s.sale_status === "fully_invoiced" || s.sale_status === "invoiced") && (
+                            <Button size="icon" variant="ghost" onClick={() => navigate(`/sales/${s.id}/invoice`)} title="View Invoice">
                               <FileText className="h-4 w-4" />
                             </Button>
                           )}
