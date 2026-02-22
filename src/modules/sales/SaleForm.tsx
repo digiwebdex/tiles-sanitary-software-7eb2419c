@@ -315,16 +315,16 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
                               </div>
                               <Button
                                 type="button"
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
-                                className="h-8 px-2 text-xs text-muted-foreground"
+                                className="h-9 px-3 text-xs shrink-0"
                                 onClick={() => {
                                   form.setValue(`items.${idx}.product_id`, "");
                                   form.setValue(`items.${idx}.sale_rate`, 0);
                                   setItemSearches((s) => ({ ...s, [idx]: "" }));
                                 }}
                               >
-                                Change
+                                <Trash2 className="mr-1 h-3 w-3" /> Change
                               </Button>
                             </div>
                           ) : (
