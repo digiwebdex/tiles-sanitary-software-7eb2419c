@@ -59,6 +59,7 @@ const EditSalePage = () => {
   const defaultValues: Partial<SaleFormValues> = {
     customer_name: customer?.name ?? "",
     sale_date: sale.sale_date,
+    sale_type: ((sale as any).sale_type as any) ?? "direct_invoice",
     discount: Number(sale.discount),
     discount_reference: sale.discount_reference ?? "",
     client_reference: sale.client_reference ?? "",
