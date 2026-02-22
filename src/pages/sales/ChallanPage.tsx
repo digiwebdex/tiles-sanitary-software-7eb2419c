@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { challanService } from "@/services/challanService";
 import { salesService } from "@/services/salesService";
 import { useDealerId } from "@/hooks/useDealerId";
+import { useDealerInfo } from "@/hooks/useDealerInfo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -17,6 +18,7 @@ const ChallanPage = () => {
   const dealerId = useDealerId();
   const queryClient = useQueryClient();
   const [showPrices, setShowPrices] = useState(false);
+  const { data: dealerInfo } = useDealerInfo();
 
   const { data: sale, isLoading: saleLoading } = useQuery({
     queryKey: ["sale", saleId],
@@ -169,6 +171,7 @@ const ChallanPage = () => {
             customer={customer}
             challan={activeChallan}
             showPrices={showPrices}
+            dealerInfo={dealerInfo}
           />
         </div>
       </div>
@@ -180,6 +183,7 @@ const ChallanPage = () => {
           customer={customer}
           challan={activeChallan}
           showPrices={showPrices}
+          dealerInfo={dealerInfo}
         />
       </div>
     </>
@@ -192,9 +196,10 @@ interface ChallanDocumentProps {
   customer: any;
   challan: any;
   showPrices: boolean;
+  dealerInfo?: { name: string; phone: string | null; address: string | null } | null;
 }
 
-const ChallanDocument = ({ sale, items, customer, challan, showPrices }: ChallanDocumentProps) => {
+const ChallanDocument = ({ sale, items, customer, challan, showPrices, dealerInfo }: ChallanDocumentProps) => {
   return (
     <div className="p-8 font-sans text-sm text-gray-800">
       {/* Header */}
@@ -212,8 +217,10 @@ const ChallanDocument = ({ sale, items, customer, challan, showPrices }: Challan
           </p>
         </div>
         <div className="text-right">
-          <p className="text-lg font-bold text-gray-900">Your Business Name</p>
+          <p className="text-lg font-bold text-gray-900">{dealerInfo?.name ?? "Your Business Name"}</p>
           <p className="text-xs text-gray-500 mt-0.5">Tile & Sanitary Dealer</p>
+          {dealerInfo?.phone && <p className="text-xs text-gray-500">{dealerInfo.phone}</p>}
+          {dealerInfo?.address && <p className="text-xs text-gray-500 max-w-[200px] ml-auto">{dealerInfo.address}</p>}
           {challan && (
             <div className={`mt-3 inline-block px-3 py-1 rounded border text-xs font-bold tracking-widest uppercase ${
               (challan as any).status === "delivered"

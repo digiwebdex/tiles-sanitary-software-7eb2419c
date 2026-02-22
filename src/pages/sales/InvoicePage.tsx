@@ -7,11 +7,13 @@ import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { useDealerInfo } from "@/hooks/useDealerInfo";
 
 const InvoicePage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isDealerAdmin } = useAuth();
+  const { data: dealerInfo } = useDealerInfo();
 
   const { data: sale, isLoading } = useQuery({
     queryKey: ["sale", id],
@@ -93,6 +95,7 @@ const InvoicePage = () => {
             paidAmount={paidAmount}
             dueAmount={dueAmount}
             isDealerAdmin={isDealerAdmin}
+            dealerInfo={dealerInfo}
           />
         </div>
       </div>
@@ -109,6 +112,7 @@ const InvoicePage = () => {
           paidAmount={paidAmount}
           dueAmount={dueAmount}
           isDealerAdmin={isDealerAdmin}
+          dealerInfo={dealerInfo}
         />
       </div>
     </>
@@ -125,6 +129,7 @@ interface InvoiceDocumentProps {
   paidAmount: number;
   dueAmount: number;
   isDealerAdmin: boolean;
+  dealerInfo?: { name: string; phone: string | null; address: string | null } | null;
 }
 
 const InvoiceDocument = ({
@@ -137,6 +142,7 @@ const InvoiceDocument = ({
   paidAmount,
   dueAmount,
   isDealerAdmin,
+  dealerInfo,
 }: InvoiceDocumentProps) => {
   const paymentStatus =
     dueAmount <= 0 ? "PAID" : paidAmount > 0 ? "PARTIAL" : "UNPAID";
@@ -159,9 +165,10 @@ const InvoiceDocument = ({
           <p className="mt-1 text-xs text-gray-500">Date: <span className="font-medium text-gray-700">{sale.sale_date}</span></p>
         </div>
         <div className="text-right">
-          {/* Business info placeholder — can be made dynamic later */}
-          <p className="text-lg font-bold text-gray-900">Your Business Name</p>
+          <p className="text-lg font-bold text-gray-900">{dealerInfo?.name ?? "Your Business Name"}</p>
           <p className="text-xs text-gray-500 mt-0.5">Tile & Sanitary Dealer</p>
+          {dealerInfo?.phone && <p className="text-xs text-gray-500">{dealerInfo.phone}</p>}
+          {dealerInfo?.address && <p className="text-xs text-gray-500 max-w-[200px] ml-auto">{dealerInfo.address}</p>}
           <div
             className={`mt-3 inline-block px-3 py-1 rounded border text-xs font-bold tracking-widest uppercase ${statusColor}`}
           >
