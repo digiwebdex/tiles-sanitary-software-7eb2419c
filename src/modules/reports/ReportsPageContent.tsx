@@ -211,7 +211,7 @@ function BrandStockReport({ dealerId }: { dealerId: string }) {
 
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">Brand-wise Stock</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base">Brands Report</CardTitle></CardHeader>
       <CardContent>
         {isLoading ? <p className="text-muted-foreground">Loading…</p> : (
           <div className="rounded-md border overflow-x-auto">
@@ -219,26 +219,41 @@ function BrandStockReport({ dealerId }: { dealerId: string }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Brand</TableHead>
-                  <TableHead className="text-right">Products</TableHead>
-                  <TableHead className="text-right">Boxes</TableHead>
-                  <TableHead className="text-right">SFT</TableHead>
-                  <TableHead className="text-right">Pieces</TableHead>
-                  <TableHead className="text-right">Total Value</TableHead>
+                  <TableHead className="text-right">Purchased</TableHead>
+                  <TableHead className="text-right">Sold</TableHead>
+                  <TableHead className="text-right">Purchased Amount</TableHead>
+                  <TableHead className="text-right">Sold Amount</TableHead>
+                  <TableHead className="text-right">Profit and/or Loss</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(data ?? []).length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No data</TableCell></TableRow>
-                ) : (data ?? []).map((r) => (
-                  <TableRow key={r.brand}>
-                    <TableCell className="font-medium">{r.brand}</TableCell>
-                    <TableCell className="text-right">{r.productCount}</TableCell>
-                    <TableCell className="text-right">{r.totalBox}</TableCell>
-                    <TableCell className="text-right">{r.totalSft.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">{r.totalPiece}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(r.totalValue)}</TableCell>
-                  </TableRow>
-                ))}
+                ) : (
+                  <>
+                    {(data ?? []).map((r) => (
+                      <TableRow key={r.brand}>
+                        <TableCell className="font-medium">{r.brand}</TableCell>
+                        <TableCell className="text-right">{r.purchasedQty.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{r.soldQty.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(r.purchasedAmount)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(r.soldAmount)}</TableCell>
+                        <TableCell className={`text-right font-semibold ${r.profitOrLoss >= 0 ? "text-primary" : "text-destructive"}`}>
+                          {formatCurrency(r.profitOrLoss)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {/* Totals row */}
+                    <TableRow className="bg-muted/50 font-semibold">
+                      <TableCell>[Brand]</TableCell>
+                      <TableCell className="text-right">{(data ?? []).reduce((s, r) => s + r.purchasedQty, 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right">{(data ?? []).reduce((s, r) => s + r.soldQty, 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right">{formatCurrency((data ?? []).reduce((s, r) => s + r.purchasedAmount, 0))}</TableCell>
+                      <TableCell className="text-right">{formatCurrency((data ?? []).reduce((s, r) => s + r.soldAmount, 0))}</TableCell>
+                      <TableCell className="text-right">{formatCurrency((data ?? []).reduce((s, r) => s + r.profitOrLoss, 0))}</TableCell>
+                    </TableRow>
+                  </>
+                )}
               </TableBody>
             </Table>
           </div>
