@@ -124,7 +124,7 @@ const SalesReturnList = ({ dealerId }: SalesReturnListProps) => {
               </TableRow>
             ) : (
               paginated.map((r: any) => (
-                <TableRow key={r.id} className="hover:bg-muted/50">
+                <TableRow key={r.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => navigate(`/sales/${r.sale_id}/invoice`)}>
                   <TableCell>
                     <Checkbox
                       checked={selected.includes(r.id)}
