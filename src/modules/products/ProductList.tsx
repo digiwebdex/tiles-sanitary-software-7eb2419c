@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { Plus, Search, Pencil, AlertTriangle, Barcode, Printer, MoreHorizontal, Eye, Copy, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import BarcodePrintDialog from "./BarcodePrintDialog";
+import ProductDetailDialog from "./ProductDetailDialog";
 
 interface ProductListProps {
   dealerId: string;
@@ -31,6 +32,7 @@ const ProductList = ({ dealerId }: ProductListProps) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [barcodeSingle, setBarcodeSingle] = useState<{ id: string; sku: string; name: string; default_sale_rate: number } | null>(null);
+  const [detailProduct, setDetailProduct] = useState<typeof products[0] | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -201,11 +203,12 @@ const ProductList = ({ dealerId }: ProductListProps) => {
                   const reorder = p.reorder_level ?? 0;
 
                   return (
-                    <TableRow key={p.id}>
+                    <TableRow key={p.id} className="cursor-pointer" onClick={() => setDetailProduct(p)}>
                       <TableCell>
                         <Checkbox
                           checked={selected.has(p.id)}
                           onCheckedChange={() => toggleSelect(p.id)}
+                          onClick={(e) => e.stopPropagation()}
                         />
                       </TableCell>
                       <TableCell className="font-mono text-sm">{p.sku}</TableCell>
@@ -246,7 +249,7 @@ const ProductList = ({ dealerId }: ProductListProps) => {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button size="sm" variant="outline" className="h-8 px-3 text-xs">
@@ -254,6 +257,9 @@ const ProductList = ({ dealerId }: ProductListProps) => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setDetailProduct(p)}>
+                              <Eye className="mr-2 h-4 w-4" /> Product Details
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => navigate(`/products/${p.id}/edit`)}>
                               <Pencil className="mr-2 h-4 w-4" /> Edit Product
                             </DropdownMenuItem>
@@ -287,6 +293,16 @@ const ProductList = ({ dealerId }: ProductListProps) => {
         open={barcodeOpen}
         onOpenChange={setBarcodeOpen}
         products={barcodeProducts}
+      />
+
+      <ProductDetailDialog
+        open={!!detailProduct}
+        onOpenChange={(open) => { if (!open) setDetailProduct(null); }}
+        product={detailProduct}
+        cost={detailProduct ? (costData?.get(detailProduct.id) ?? 0) : 0}
+        quantity={detailProduct ? (stockData?.get(detailProduct.id) ?? 0) : 0}
+        onEdit={() => { if (detailProduct) { setDetailProduct(null); navigate(`/products/${detailProduct.id}/edit`); } }}
+        onPrintBarcode={() => { if (detailProduct) { setDetailProduct(null); openSingleBarcode(detailProduct); } }}
       />
     </div>
   );
