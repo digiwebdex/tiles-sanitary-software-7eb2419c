@@ -41,17 +41,23 @@ async function generateInvoiceNumber(dealerId: string): Promise<string> {
 }
 
 export const salesService = {
-  async list(dealerId: string, page = 1) {
+  async list(dealerId: string, page = 1, search?: string) {
     const from = (page - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    const { data, error, count } = await supabase
+    let query = supabase
       .from("sales")
       .select("*, customers(name, type)", { count: "exact" })
       .eq("dealer_id", dealerId)
       .order("sale_date", { ascending: false })
       .order("created_at", { ascending: false })
       .range(from, to);
+
+    if (search?.trim()) {
+      query = query.or(`invoice_number.ilike.%${search.trim()}%`);
+    }
+
+    const { data, error, count } = await query;
     if (error) throw new Error(error.message);
     return { data: data ?? [], total: count ?? 0 };
   },
