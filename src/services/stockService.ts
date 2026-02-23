@@ -270,4 +270,32 @@ export const stockService = {
   },
 
   updateAverageCost,
+
+  /**
+   * Deduct broken/damaged stock and log with "broken" type
+   */
+  async deductBrokenStock(productId: string, quantity: number, dealerId: string, reason: string) {
+    if (quantity <= 0) throw new Error("Quantity must be positive");
+
+    const product = await getProduct(productId);
+    const stock = await getOrCreateStock(productId, dealerId);
+    const updates = computeStockUpdate(product, stock, quantity, "deduct");
+
+    const { error } = await supabase
+      .from("stock")
+      .update(updates)
+      .eq("product_id", productId)
+      .eq("dealer_id", dealerId);
+
+    if (error) throw new Error(`Broken stock deduction failed: ${error.message}`);
+
+    await logAudit({
+      dealer_id: dealerId,
+      action: "stock_broken",
+      table_name: "stock",
+      record_id: stock.id,
+      old_data: { box_qty: stock.box_qty, sft_qty: stock.sft_qty, piece_qty: stock.piece_qty },
+      new_data: { ...updates, adjustment_type: "broken", quantity, reason },
+    });
+  },
 };

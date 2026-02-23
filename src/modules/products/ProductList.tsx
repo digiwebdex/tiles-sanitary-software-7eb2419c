@@ -15,10 +15,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, AlertTriangle, Barcode, Printer, MoreHorizontal, Eye, Copy, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, AlertTriangle, Barcode, Printer, MoreHorizontal, Eye, Copy, Trash2, ShoppingCart, AlertOctagon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import BarcodePrintDialog from "./BarcodePrintDialog";
 import ProductDetailDialog from "./ProductDetailDialog";
+import BrokenStockDialog from "./BrokenStockDialog";
 
 interface ProductListProps {
   dealerId: string;
@@ -33,6 +34,7 @@ const ProductList = ({ dealerId }: ProductListProps) => {
   const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [barcodeSingle, setBarcodeSingle] = useState<{ id: string; sku: string; name: string; default_sale_rate: number } | null>(null);
   const [detailProduct, setDetailProduct] = useState<typeof products[0] | null>(null);
+  const [brokenProduct, setBrokenProduct] = useState<typeof products[0] | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -47,11 +49,14 @@ const ProductList = ({ dealerId }: ProductListProps) => {
     queryFn: async () => {
       const { data } = await supabase
         .from("stock")
-        .select("product_id, box_qty, piece_qty")
+        .select("product_id, box_qty, sft_qty, piece_qty")
         .eq("dealer_id", dealerId);
-      const map = new Map<string, number>();
+      const map = new Map<string, { total: number; box: number; sft: number; piece: number }>();
       for (const s of data ?? []) {
-        map.set(s.product_id, (Number(s.box_qty) || 0) + (Number(s.piece_qty) || 0));
+        const box = Number(s.box_qty) || 0;
+        const sft = Number(s.sft_qty) || 0;
+        const piece = Number(s.piece_qty) || 0;
+        map.set(s.product_id, { total: box + piece, box, sft, piece });
       }
       return map;
     },
@@ -174,7 +179,7 @@ const ProductList = ({ dealerId }: ProductListProps) => {
       ) : (
         <>
           <div className="rounded-md border overflow-x-auto">
-            <Table>
+           <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
@@ -198,7 +203,8 @@ const ProductList = ({ dealerId }: ProductListProps) => {
               </TableHeader>
               <TableBody>
                 {products.map((p) => {
-                  const qty = stockData?.get(p.id) ?? 0;
+                  const stockInfo = stockData?.get(p.id) ?? { total: 0, box: 0, sft: 0, piece: 0 };
+                  const qty = stockInfo.total;
                   const cost = costData?.get(p.id) ?? 0;
                   const reorder = p.reorder_level ?? 0;
 
@@ -224,7 +230,14 @@ const ProductList = ({ dealerId }: ProductListProps) => {
                       <TableCell className="text-right">{formatCurrency(cost)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(p.default_sale_rate)}</TableCell>
                       <TableCell className={`text-right font-medium ${qty < 0 ? "text-destructive" : ""}`}>
-                        {qty.toFixed(2)}
+                        {p.unit_type === "box_sft" ? (
+                          <div>
+                            <span>{stockInfo.box} Box</span>
+                            <span className="text-xs text-muted-foreground ml-1">({stockInfo.sft.toFixed(2)} Sft)</span>
+                          </div>
+                        ) : (
+                          <span>{stockInfo.piece} Pcs</span>
+                        )}
                       </TableCell>
                       <TableCell>{p.unit_type === "box_sft" ? "Sft" : "Piece"}</TableCell>
                       <TableCell className="text-right">{reorder > 0 ? reorder : "—"}</TableCell>
@@ -269,6 +282,12 @@ const ProductList = ({ dealerId }: ProductListProps) => {
                             <DropdownMenuItem onClick={() => openSingleBarcode(p)}>
                               <Barcode className="mr-2 h-4 w-4" /> Print Barcode/Label
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/purchases/new?product=${p.id}`)}>
+                              <ShoppingCart className="mr-2 h-4 w-4" /> Create Purchase
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setBrokenProduct(p)}>
+                              <AlertOctagon className="mr-2 h-4 w-4" /> Mark Broken
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => toggleMutation.mutate({ id: p.id, active: !p.active })}
                             >
@@ -280,6 +299,31 @@ const ProductList = ({ dealerId }: ProductListProps) => {
                     </TableRow>
                   );
                 })}
+                {/* Summary Footer */}
+                {products.length > 0 && (() => {
+                  const totals = products.reduce(
+                    (acc, p) => {
+                      const si = stockData?.get(p.id) ?? { total: 0, box: 0, sft: 0, piece: 0 };
+                      acc.box += si.box;
+                      acc.sft += si.sft;
+                      acc.piece += si.piece;
+                      return acc;
+                    },
+                    { box: 0, sft: 0, piece: 0 }
+                  );
+                  return (
+                    <TableRow className="bg-muted/50 font-semibold">
+                      <TableCell colSpan={7} className="text-right">Stock Totals:</TableCell>
+                      <TableCell className="text-right">
+                        <div className="space-y-0.5">
+                          {totals.box > 0 && <div>{totals.box} Box ({totals.sft.toFixed(2)} Sft)</div>}
+                          {totals.piece > 0 && <div>{totals.piece} Pcs</div>}
+                        </div>
+                      </TableCell>
+                      <TableCell colSpan={4} />
+                    </TableRow>
+                  );
+                })()}
               </TableBody>
             </Table>
           </div>
@@ -300,9 +344,21 @@ const ProductList = ({ dealerId }: ProductListProps) => {
         onOpenChange={(open) => { if (!open) setDetailProduct(null); }}
         product={detailProduct}
         cost={detailProduct ? (costData?.get(detailProduct.id) ?? 0) : 0}
-        quantity={detailProduct ? (stockData?.get(detailProduct.id) ?? 0) : 0}
+        quantity={detailProduct ? (stockData?.get(detailProduct.id)?.total ?? 0) : 0}
         onEdit={() => { if (detailProduct) { setDetailProduct(null); navigate(`/products/${detailProduct.id}/edit`); } }}
         onPrintBarcode={() => { if (detailProduct) { setDetailProduct(null); openSingleBarcode(detailProduct); } }}
+        onPurchase={() => { if (detailProduct) { setDetailProduct(null); navigate(`/purchases/new?product=${detailProduct.id}`); } }}
+      />
+
+      <BrokenStockDialog
+        open={!!brokenProduct}
+        onOpenChange={(open) => { if (!open) setBrokenProduct(null); }}
+        product={brokenProduct}
+        dealerId={dealerId}
+        onSuccess={() => {
+          setBrokenProduct(null);
+          queryClient.invalidateQueries({ queryKey: ["products-stock-map"] });
+        }}
       />
     </div>
   );

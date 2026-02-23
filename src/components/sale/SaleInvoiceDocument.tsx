@@ -145,6 +145,15 @@ const SaleInvoiceDocument = ({
             })}
           </tbody>
         </table>
+
+        {/* Box/Piece/SFT Summary */}
+        {(Number(sale.total_box) > 0 || Number(sale.total_piece) > 0) && (
+          <div className="flex gap-3 mt-2 text-xs font-medium text-muted-foreground justify-end">
+            {Number(sale.total_box) > 0 && <span>Total Box: <strong className="text-foreground">{Number(sale.total_box)}</strong></span>}
+            {Number(sale.total_sft) > 0 && <span>Total Sft: <strong className="text-foreground">{Number(sale.total_sft).toFixed(2)}</strong></span>}
+            {Number(sale.total_piece) > 0 && <span>Total Pcs: <strong className="text-foreground">{Number(sale.total_piece)}</strong></span>}
+          </div>
+        )}
       </div>
 
       {/* Totals */}

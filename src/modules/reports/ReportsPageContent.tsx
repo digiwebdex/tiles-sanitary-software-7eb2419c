@@ -50,6 +50,7 @@ const reportNavItems = [
   { key: "brand-stock", label: "Brands Report", icon: Tags },
   { key: "daily-sales", label: "Daily Sales", icon: CalendarDays },
   { key: "sales", label: "Monthly Sales", icon: Calendar },
+  { key: "monthly-summary", label: "Monthly Summary", icon: BookOpen },
   { key: "sales-report", label: "Sales Report", icon: Receipt },
   { key: "inventory", label: "Inventory Report", icon: Layers },
   { key: "low-stock", label: "Low Stock Report", icon: AlertTriangle },
@@ -68,6 +69,7 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "stock": return <StockReport dealerId={dealerId} />;
       case "brand-stock": return <BrandStockReport dealerId={dealerId} />;
       case "daily-sales": return <DailySalesCalendar dealerId={dealerId} />;
+      case "monthly-summary": return <MonthlySummaryReport dealerId={dealerId} />;
       case "inventory": return <InventoryAgingReport dealerId={dealerId} />;
       case "low-stock": return <LowStockReport dealerId={dealerId} />;
       case "sales": return <SalesReport dealerId={dealerId} />;
@@ -882,6 +884,115 @@ function AccountingSummaryReport({ dealerId }: { dealerId: string }) {
                   <TableCell className="text-right">{formatCurrency((data ?? []).reduce((s, r) => s + r.totalDue, 0))}</TableCell>
                   <TableCell className="text-right">{formatCurrency((data ?? []).reduce((s, r) => s + r.cashIn, 0))}</TableCell>
                   <TableCell className="text-right">{formatCurrency((data ?? []).reduce((s, r) => s + r.cashOut, 0))}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Monthly Summary Report (Sales/Collection/Due/SFT) ───
+function MonthlySummaryReport({ dealerId }: { dealerId: string }) {
+  const [year, setYear] = useState(currentYear);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["report-monthly-summary", dealerId, year],
+    queryFn: async () => {
+      const yearStart = `${year}-01-01`;
+      const yearEnd = `${year}-12-31`;
+
+      const [salesRes, paymentsRes] = await Promise.all([
+        supabase
+          .from("sales")
+          .select("sale_date, total_amount, paid_amount, due_amount, total_sft")
+          .eq("dealer_id", dealerId)
+          .gte("sale_date", yearStart)
+          .lte("sale_date", yearEnd),
+        supabase
+          .from("customer_ledger")
+          .select("entry_date, amount, type")
+          .eq("dealer_id", dealerId)
+          .in("type", ["payment", "receipt"])
+          .gte("entry_date", yearStart)
+          .lte("entry_date", yearEnd),
+      ]);
+
+      const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const buckets = MONTHS.map((m) => ({
+        month: m,
+        totalSales: 0,
+        totalCollection: 0,
+        totalDue: 0,
+        totalSft: 0,
+        paymentReceived: 0,
+      }));
+
+      for (const r of salesRes.data ?? []) {
+        const m = new Date(r.sale_date).getMonth();
+        buckets[m].totalSales += Number(r.total_amount);
+        buckets[m].totalCollection += Number(r.paid_amount);
+        buckets[m].totalDue += Number(r.due_amount);
+        buckets[m].totalSft += Number(r.total_sft);
+      }
+
+      for (const r of paymentsRes.data ?? []) {
+        const m = new Date(r.entry_date).getMonth();
+        buckets[m].paymentReceived += Math.abs(Number(r.amount));
+      }
+
+      return buckets;
+    },
+  });
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-base">Monthly Summary — {year}</CardTitle>
+        <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+          <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? <p className="text-muted-foreground">Loading…</p> : (
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Month</TableHead>
+                  <TableHead className="text-right">Sales (৳)</TableHead>
+                  <TableHead className="text-right">Collection (৳)</TableHead>
+                  <TableHead className="text-right">Due (৳)</TableHead>
+                  <TableHead className="text-right">Payment Received (৳)</TableHead>
+                  <TableHead className="text-right">Total SFT</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(data ?? []).map((r) => (
+                  <TableRow key={r.month}>
+                    <TableCell className="font-medium">{r.month}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(r.totalSales)}</TableCell>
+                    <TableCell className="text-right text-primary">{formatCurrency(r.totalCollection)}</TableCell>
+                    <TableCell className={`text-right ${r.totalDue > 0 ? "text-destructive" : ""}`}>
+                      {formatCurrency(r.totalDue)}
+                    </TableCell>
+                    <TableCell className="text-right">{formatCurrency(r.paymentReceived)}</TableCell>
+                    <TableCell className="text-right">{r.totalSft.toFixed(2)}</TableCell>
+                  </TableRow>
+                ))}
+                {/* Totals */}
+                <TableRow className="bg-muted/50 font-semibold">
+                  <TableCell>Total</TableCell>
+                  <TableCell className="text-right">{formatCurrency((data ?? []).reduce((s, r) => s + r.totalSales, 0))}</TableCell>
+                  <TableCell className="text-right">{formatCurrency((data ?? []).reduce((s, r) => s + r.totalCollection, 0))}</TableCell>
+                  <TableCell className="text-right">{formatCurrency((data ?? []).reduce((s, r) => s + r.totalDue, 0))}</TableCell>
+                  <TableCell className="text-right">{formatCurrency((data ?? []).reduce((s, r) => s + r.paymentReceived, 0))}</TableCell>
+                  <TableCell className="text-right">{(data ?? []).reduce((s, r) => s + r.totalSft, 0).toFixed(2)}</TableCell>
                 </TableRow>
               </TableBody>
             </Table>

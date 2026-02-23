@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/utils";
-import { Printer, Pencil, Barcode } from "lucide-react";
+import { Printer, Pencil, Barcode, ShoppingCart } from "lucide-react";
 
 interface ProductDetailDialogProps {
   open: boolean;
@@ -32,10 +32,11 @@ interface ProductDetailDialogProps {
   quantity: number;
   onEdit: () => void;
   onPrintBarcode: () => void;
+  onPurchase?: () => void;
 }
 
 const ProductDetailDialog = ({
-  open, onOpenChange, product, cost, quantity, onEdit, onPrintBarcode,
+  open, onOpenChange, product, cost, quantity, onEdit, onPrintBarcode, onPurchase,
 }: ProductDetailDialogProps) => {
   const barcodeSvgRef = useRef<SVGSVGElement>(null);
 
@@ -134,8 +135,13 @@ const ProductDetailDialog = ({
         {/* Action Buttons */}
         <div className="flex gap-2 pt-2">
           <Button variant="outline" className="flex-1" onClick={onPrintBarcode}>
-            <Barcode className="mr-2 h-4 w-4" /> Print Barcode
+            <Barcode className="mr-2 h-4 w-4" /> Barcode
           </Button>
+          {onPurchase && (
+            <Button variant="outline" className="flex-1" onClick={onPurchase}>
+              <ShoppingCart className="mr-2 h-4 w-4" /> Purchase
+            </Button>
+          )}
           <Button className="flex-1" onClick={onEdit}>
             <Pencil className="mr-2 h-4 w-4" /> Edit
           </Button>
