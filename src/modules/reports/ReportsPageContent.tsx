@@ -82,53 +82,34 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)]">
-      {/* Sidebar */}
-      <aside className="hidden md:flex w-52 flex-col border-r bg-card shrink-0">
-        <div className="flex items-center gap-2 px-4 py-3 border-b">
+    <div className="min-h-[calc(100vh-8rem)]">
+      {/* Report tabs */}
+      <div className="border-b bg-card px-4 pt-3">
+        <div className="flex items-center gap-2 mb-2">
           <BarChart3 className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-bold text-foreground">Reports</h2>
         </div>
-        <nav className="py-1 overflow-y-auto">
+        <div className="flex overflow-x-auto gap-0 -mb-px">
           {reportNavItems.map((item) => (
             <button
               key={item.key}
               onClick={() => setActiveReport(item.key)}
               className={cn(
-                "flex w-full items-center gap-2.5 px-4 py-1.5 text-[13px] transition-colors border-l-2",
+                "flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[13px] transition-colors border-b-2 shrink-0",
                 activeReport === item.key
-                  ? "border-l-primary bg-primary/10 text-primary font-medium"
-                  : "border-l-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  ? "border-b-primary text-primary font-medium"
+                  : "border-b-transparent text-muted-foreground hover:text-foreground hover:border-b-muted-foreground/30"
               )}
             >
               <item.icon className="h-3.5 w-3.5 shrink-0" />
               {item.label}
             </button>
           ))}
-        </nav>
-      </aside>
-
-      {/* Mobile horizontal scroll nav */}
-      <nav className="flex md:hidden overflow-x-auto border-b bg-card px-2 py-1 gap-1 absolute top-0 left-0 right-0 z-10">
-        {reportNavItems.map((item) => (
-          <button
-            key={item.key}
-            onClick={() => setActiveReport(item.key)}
-            className={cn(
-              "flex items-center gap-1 whitespace-nowrap rounded-md px-3 py-1.5 text-xs transition-colors",
-              activeReport === item.key
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground"
-            )}
-          >
-            <item.icon className="h-3 w-3" />
-            {item.label}
-          </button>
-        ))}
-      </nav>
+        </div>
+      </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-4 lg:p-6 md:pt-4 pt-12">
+      <div className="p-4 lg:p-6">
         {renderReport()}
       </div>
     </div>
