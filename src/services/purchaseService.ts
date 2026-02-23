@@ -46,16 +46,22 @@ function calcTotalSft(quantity: number, unitType: string, perBoxSft: number | nu
 }
 
 export const purchaseService = {
-  async list(dealerId: string, page = 1) {
+  async list(dealerId: string, page = 1, search?: string) {
     const from = (page - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    const { data, error, count } = await supabase
+    let query = supabase
       .from("purchases")
       .select("*, suppliers(name)", { count: "exact" })
       .eq("dealer_id", dealerId)
       .order("purchase_date", { ascending: false })
       .range(from, to);
+
+    if (search?.trim()) {
+      query = query.or(`invoice_number.ilike.%${search.trim()}%`);
+    }
+
+    const { data, error, count } = await query;
     if (error) throw new Error(error.message);
     return { data: data ?? [], total: count ?? 0 };
   },
