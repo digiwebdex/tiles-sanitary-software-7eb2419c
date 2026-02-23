@@ -553,14 +553,26 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
         </Card>
       </div>
 
-      {/* ── Low Stock Items Table ── */}
+      {/* ── Low Stock Alerts Dashboard ── */}
       {data.lowStockItems.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              Low Stock Items
-            </CardTitle>
+        <Card className="border-destructive/30">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                Low Stock Alerts
+                <Badge variant="destructive" className="text-xs">{data.lowStockItems.length}</Badge>
+              </CardTitle>
+              <button
+                onClick={() => navigate("/reports", { state: { tab: "low-stock" } })}
+                className="text-xs text-primary hover:underline"
+              >
+                View Full Report →
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Products below reorder level — click "Purchase" to restock
+            </p>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border">
@@ -570,22 +582,45 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
                     <TableHead>Product</TableHead>
                     <TableHead>SKU</TableHead>
                     <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Current Qty</TableHead>
+                    <TableHead className="text-right">Current</TableHead>
                     <TableHead className="text-right">Reorder Level</TableHead>
+                    <TableHead className="text-right">Suggested Qty</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.lowStockItems.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell className="font-mono text-sm">{item.sku}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize text-xs">{item.category}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-destructive font-semibold">{item.currentQty}</TableCell>
-                      <TableCell className="text-right">{item.reorderLevel}</TableCell>
-                    </TableRow>
-                  ))}
+                  {data.lowStockItems.map((item) => {
+                    const suggestedQty = Math.max(0, (item.reorderLevel * 2) - item.currentQty);
+                    const isOutOfStock = item.currentQty === 0;
+                    return (
+                      <TableRow key={item.id} className={isOutOfStock ? "bg-destructive/5" : ""}>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="font-mono text-sm">{item.sku}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize text-xs">{item.category}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-destructive font-bold">{item.currentQty}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{item.reorderLevel}</TableCell>
+                        <TableCell className="text-right font-semibold text-primary">{suggestedQty}</TableCell>
+                        <TableCell className="text-center">
+                          {isOutOfStock ? (
+                            <Badge variant="destructive" className="text-xs">Out of Stock</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs border-destructive/50 text-destructive">Low</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <button
+                            onClick={() => navigate("/purchases/new")}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                          >
+                            <ShoppingCart className="h-3 w-3" /> Purchase
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
