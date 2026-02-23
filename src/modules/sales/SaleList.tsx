@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { salesService } from "@/services/salesService";
+import { deliveryService } from "@/services/deliveryService";
 import Pagination from "@/components/Pagination";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface SaleListProps {
   dealerId: string;
@@ -51,8 +53,27 @@ const SaleList = ({ dealerId }: SaleListProps) => {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const { isDealerAdmin } = useAuth();
+  const { isDealerAdmin, profile } = useAuth();
+  const queryClient = useQueryClient();
 
+  const addDeliveryMutation = useMutation({
+    mutationFn: (sale: any) =>
+      deliveryService.create({
+        dealer_id: dealerId,
+        sale_id: sale.id,
+        delivery_date: new Date().toISOString().split("T")[0],
+        receiver_name: sale.customers?.name || undefined,
+        delivery_address: sale.customers?.address || undefined,
+        receiver_phone: sale.customers?.phone || undefined,
+        created_by: profile?.id,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["deliveries"] });
+      toast.success("Delivery created successfully");
+      navigate("/deliveries");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
   const { data, isLoading } = useQuery({
     queryKey: ["sales", dealerId, page, search],
     queryFn: () => salesService.list(dealerId, page, search),
@@ -197,7 +218,7 @@ const SaleList = ({ dealerId }: SaleListProps) => {
                                 <Package className="mr-2 h-4 w-4" /> Packing List
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem onClick={() => navigate(`/deliveries`)}>
+                            <DropdownMenuItem onClick={() => addDeliveryMutation.mutate(s)}>
                               <Truck className="mr-2 h-4 w-4" /> Add Delivery
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => navigate(`/sales/${s.id}/invoice`)}>

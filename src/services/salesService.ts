@@ -47,7 +47,7 @@ export const salesService = {
 
     let query = supabase
       .from("sales")
-      .select("*, customers(name, type)", { count: "exact" })
+      .select("*, customers(name, type, phone, address)", { count: "exact" })
       .eq("dealer_id", dealerId)
       .order("sale_date", { ascending: false })
       .order("created_at", { ascending: false })
