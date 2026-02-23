@@ -185,7 +185,7 @@ export async function fetchProductsReport(
   return { rows, total: count ?? 0 };
 }
 
-// ─── Brand-wise Stock ─────────────────────────────────────
+// ─── Brand-wise Report ────────────────────────────────────
 export interface BrandStockRow {
   brand: string;
   totalBox: number;
@@ -193,6 +193,11 @@ export interface BrandStockRow {
   totalPiece: number;
   totalValue: number;
   productCount: number;
+  purchasedQty: number;
+  purchasedAmount: number;
+  soldQty: number;
+  soldAmount: number;
+  profitOrLoss: number;
 }
 
 export async function fetchBrandStockReport(dealerId: string): Promise<BrandStockRow[]> {
@@ -205,19 +210,51 @@ export async function fetchBrandStockReport(dealerId: string): Promise<BrandStoc
   const ids = (products ?? []).map((p) => p.id);
   if (ids.length === 0) return [];
 
-  const { data: stocks } = await supabase
-    .from("stock")
-    .select("product_id, box_qty, sft_qty, piece_qty, average_cost_per_unit")
-    .eq("dealer_id", dealerId)
-    .in("product_id", ids);
+  const [stocksRes, purchaseItemsRes, saleItemsRes] = await Promise.all([
+    supabase
+      .from("stock")
+      .select("product_id, box_qty, sft_qty, piece_qty, average_cost_per_unit")
+      .eq("dealer_id", dealerId)
+      .in("product_id", ids),
+    supabase
+      .from("purchase_items")
+      .select("product_id, quantity, total")
+      .eq("dealer_id", dealerId)
+      .in("product_id", ids),
+    supabase
+      .from("sale_items")
+      .select("product_id, quantity, total")
+      .eq("dealer_id", dealerId)
+      .in("product_id", ids),
+  ]);
 
-  const stockMap = new Map((stocks ?? []).map((s) => [s.product_id, s]));
+  const stockMap = new Map((stocksRes.data ?? []).map((s) => [s.product_id, s]));
+
+  // Aggregate purchases by product
+  const purchaseMap: Record<string, { qty: number; amount: number }> = {};
+  for (const pi of purchaseItemsRes.data ?? []) {
+    if (!purchaseMap[pi.product_id]) purchaseMap[pi.product_id] = { qty: 0, amount: 0 };
+    purchaseMap[pi.product_id].qty += Number(pi.quantity);
+    purchaseMap[pi.product_id].amount += Number(pi.total);
+  }
+
+  // Aggregate sales by product
+  const saleMap: Record<string, { qty: number; amount: number }> = {};
+  for (const si of saleItemsRes.data ?? []) {
+    if (!saleMap[si.product_id]) saleMap[si.product_id] = { qty: 0, amount: 0 };
+    saleMap[si.product_id].qty += Number(si.quantity);
+    saleMap[si.product_id].amount += Number(si.total);
+  }
+
   const brandMap: Record<string, BrandStockRow> = {};
 
   for (const p of products ?? []) {
-    const brand = p.brand || "No Brand";
+    const brand = p.brand || "Others";
     if (!brandMap[brand]) {
-      brandMap[brand] = { brand, totalBox: 0, totalSft: 0, totalPiece: 0, totalValue: 0, productCount: 0 };
+      brandMap[brand] = {
+        brand, totalBox: 0, totalSft: 0, totalPiece: 0, totalValue: 0, productCount: 0,
+        purchasedQty: 0, purchasedAmount: 0, soldQty: 0, soldAmount: 0, profitOrLoss: 0,
+      };
     }
     const s = stockMap.get(p.id);
     const boxQty = Number(s?.box_qty ?? 0);
@@ -229,10 +266,25 @@ export async function fetchBrandStockReport(dealerId: string): Promise<BrandStoc
     brandMap[brand].totalPiece += pieceQty;
     brandMap[brand].totalValue += (boxQty + pieceQty) * avgCost;
     brandMap[brand].productCount += 1;
+
+    const purchased = purchaseMap[p.id] ?? { qty: 0, amount: 0 };
+    const sold = saleMap[p.id] ?? { qty: 0, amount: 0 };
+    brandMap[brand].purchasedQty += purchased.qty;
+    brandMap[brand].purchasedAmount += purchased.amount;
+    brandMap[brand].soldQty += sold.qty;
+    brandMap[brand].soldAmount += sold.amount;
+    brandMap[brand].profitOrLoss += sold.amount - (sold.qty * avgCost);
   }
 
   return Object.values(brandMap)
-    .map((b) => ({ ...b, totalValue: round2(b.totalValue), totalSft: round2(b.totalSft) }))
+    .map((b) => ({
+      ...b,
+      totalValue: round2(b.totalValue),
+      totalSft: round2(b.totalSft),
+      purchasedAmount: round2(b.purchasedAmount),
+      soldAmount: round2(b.soldAmount),
+      profitOrLoss: round2(b.profitOrLoss),
+    }))
     .sort((a, b) => b.totalValue - a.totalValue);
 }
 
