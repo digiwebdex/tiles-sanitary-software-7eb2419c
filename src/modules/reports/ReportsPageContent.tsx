@@ -50,6 +50,7 @@ const reportNavItems = [
   { key: "brand-stock", label: "Brands Report", icon: Tags },
   { key: "daily-sales", label: "Daily Sales", icon: CalendarDays },
   { key: "sales", label: "Monthly Sales", icon: Calendar },
+  { key: "sales-report", label: "Sales Report", icon: Receipt },
   { key: "inventory", label: "Inventory Report", icon: Layers },
   { key: "low-stock", label: "Low Stock Report", icon: AlertTriangle },
   { key: "retailer", label: "Customers Report", icon: Users },
@@ -70,6 +71,7 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "inventory": return <InventoryAgingReport dealerId={dealerId} />;
       case "low-stock": return <LowStockReport dealerId={dealerId} />;
       case "sales": return <SalesReport dealerId={dealerId} />;
+      case "sales-report": return <DetailedSalesReport dealerId={dealerId} />;
       case "purchases": return <PurchasesReport dealerId={dealerId} />;
       case "payments": return <PaymentsReport dealerId={dealerId} />;
       case "retailer": return <RetailerSalesReport dealerId={dealerId} />;
@@ -391,6 +393,135 @@ function BrandStockReport({ dealerId }: { dealerId: string }) {
               </TableBody>
             </Table>
           </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Detailed Sales Report ────────────────────────────────
+function DetailedSalesReport({ dealerId }: { dealerId: string }) {
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const PAGE_SIZE = 25;
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["report-detailed-sales", dealerId, page, search],
+    queryFn: async () => {
+      const from = (page - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      let query = supabase
+        .from("sales")
+        .select("id, created_at, invoice_number, sale_date, total_amount, paid_amount, due_amount, sale_status, customer_id, customers(name)", { count: "exact" })
+        .eq("dealer_id", dealerId)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (search?.trim()) {
+        query = query.or(`invoice_number.ilike.%${search.trim()}%,customers.name.ilike.%${search.trim()}%`);
+      }
+
+      const { data: sales, error, count } = await query;
+      if (error) throw new Error(error.message);
+
+      // Fetch sale_items with product info for these sales
+      const saleIds = (sales ?? []).map((s: any) => s.id);
+      let itemsMap: Record<string, { name: string; qty: number }[]> = {};
+      if (saleIds.length > 0) {
+        const { data: items } = await supabase
+          .from("sale_items")
+          .select("sale_id, quantity, products(name, size, unit_type, category)")
+          .in("sale_id", saleIds);
+
+        for (const item of items ?? []) {
+          const sid = (item as any).sale_id;
+          if (!itemsMap[sid]) itemsMap[sid] = [];
+          const p = (item as any).products;
+          const label = p ? `${p.category === "tiles" ? (p.name?.includes("Wall") ? "Wall Tiles" : (p.name?.includes("Floor") ? "Floor Tiles" : p.name)) : p.name}${p.size ? ` (Size: ${p.size})` : ""} (${p.unit_type === "box_sft" ? "Box" : "Pcs"})` : "Product";
+          itemsMap[sid].push({ name: label, qty: Number((item as any).quantity) });
+        }
+      }
+
+      return { sales: sales ?? [], total: count ?? 0, itemsMap };
+    },
+  });
+
+  const sales = data?.sales ?? [];
+  const total = data?.total ?? 0;
+
+  const paymentBadge = (due: number, paid: number) => {
+    if (due <= 0) return <Badge className="bg-green-600 text-white hover:bg-green-700 text-xs">Paid</Badge>;
+    if (paid > 0) return <Badge variant="outline" className="border-yellow-500 text-yellow-600 text-xs">Partial</Badge>;
+    return <Badge className="bg-orange-100 text-orange-700 text-xs">Pending</Badge>;
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4 pb-2">
+        <CardTitle className="text-base">Sales Report</CardTitle>
+        <Input
+          placeholder="Search by invoice or customer…"
+          className="max-w-xs"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+        />
+      </CardHeader>
+      <CardContent>
+        {isLoading ? <p className="text-muted-foreground">Loading…</p> : (
+          <>
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Reference No</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Product (Qty)</TableHead>
+                    <TableHead className="text-right">Grand Total</TableHead>
+                    <TableHead className="text-right">Paid</TableHead>
+                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead>Payment Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sales.length === 0 ? (
+                    <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">No sales found</TableCell></TableRow>
+                  ) : sales.map((s: any) => {
+                    const due = Number(s.due_amount) || 0;
+                    const paid = Number(s.paid_amount) || 0;
+                    const items = data?.itemsMap?.[s.id] ?? [];
+                    return (
+                      <TableRow key={s.id}>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {new Date(s.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}{" "}
+                          <span className="text-muted-foreground">{new Date(s.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{s.invoice_number ?? "—"}</TableCell>
+                        <TableCell>{(s.customers as any)?.name ?? "—"}</TableCell>
+                        <TableCell className="text-xs max-w-[250px]">
+                          {items.length > 0 ? (
+                            <div className="space-y-0.5">
+                              {items.map((it, idx) => (
+                                <div key={idx} className="text-muted-foreground">
+                                  {it.name} ({it.qty})
+                                </div>
+                              ))}
+                            </div>
+                          ) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">{formatCurrency(s.total_amount)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(paid)}</TableCell>
+                        <TableCell className={`text-right ${due > 0 ? "text-destructive font-semibold" : ""}`}>{formatCurrency(due)}</TableCell>
+                        <TableCell>{paymentBadge(due, paid)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <Pagination page={page} totalItems={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+          </>
         )}
       </CardContent>
     </Card>
