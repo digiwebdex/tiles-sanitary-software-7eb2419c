@@ -45,26 +45,51 @@ const months = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-const reportNavItems = [
-  { key: "stock", label: "Products Report", icon: Package },
-  { key: "brand-stock", label: "Brands Report", icon: Tags },
-  { key: "daily-sales", label: "Daily Sales", icon: CalendarDays },
-  { key: "sales", label: "Monthly Sales", icon: Calendar },
-  { key: "monthly-summary", label: "Monthly Summary", icon: BookOpen },
-  { key: "sales-report", label: "Sales Report", icon: Receipt },
-  { key: "inventory", label: "Inventory Report", icon: Layers },
-  { key: "low-stock", label: "Low Stock Report", icon: AlertTriangle },
-  { key: "retailer", label: "Customers Report", icon: Users },
-  { key: "purchases", label: "Purchases Report", icon: ShoppingCart },
-  { key: "payments", label: "Payments Report", icon: CreditCard },
-  { key: "product-history", label: "Product History", icon: History },
-  { key: "accounting", label: "Expenses Report", icon: DollarSign },
-  { key: "profit-analysis", label: "Profit Analysis", icon: TrendingUp },
-  { key: "due-aging", label: "Due Aging", icon: Clock },
+const reportGroups = [
+  {
+    label: "Sales & Revenue",
+    items: [
+      { key: "daily-sales", label: "Daily Sales", icon: CalendarDays },
+      { key: "sales", label: "Monthly Sales", icon: Calendar },
+      { key: "monthly-summary", label: "Monthly Summary", icon: BookOpen },
+      { key: "sales-report", label: "Sales Report", icon: Receipt },
+      { key: "profit-analysis", label: "Profit Analysis", icon: TrendingUp },
+    ],
+  },
+  {
+    label: "Inventory",
+    items: [
+      { key: "stock", label: "Products Report", icon: Package },
+      { key: "brand-stock", label: "Brands Report", icon: Tags },
+      { key: "inventory", label: "Inventory Report", icon: Layers },
+      { key: "low-stock", label: "Low Stock", icon: AlertTriangle },
+    ],
+  },
+  {
+    label: "Customers & Payments",
+    items: [
+      { key: "retailer", label: "Customers Report", icon: Users },
+      { key: "payments", label: "Payments Report", icon: CreditCard },
+      { key: "due-aging", label: "Due Aging", icon: Clock },
+    ],
+  },
+  {
+    label: "Purchases & Others",
+    items: [
+      { key: "purchases", label: "Purchases Report", icon: ShoppingCart },
+      { key: "product-history", label: "Product History", icon: History },
+      { key: "accounting", label: "Expenses Report", icon: DollarSign },
+    ],
+  },
 ];
 
+const allReportItems = reportGroups.flatMap((g) => g.items);
+
 const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
-  const [activeReport, setActiveReport] = useState("stock");
+  const [activeReport, setActiveReport] = useState("daily-sales");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const activeItem = allReportItems.find((i) => i.key === activeReport);
 
   const renderReport = () => {
     switch (activeReport) {
@@ -83,40 +108,106 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "accounting": return <AccountingSummaryReport dealerId={dealerId} />;
       case "due-aging": return <DueAgingReport dealerId={dealerId} />;
       case "profit-analysis": return <ProfitAnalysisReport dealerId={dealerId} />;
-      default: return <StockReport dealerId={dealerId} />;
+      default: return <DailySalesCalendar dealerId={dealerId} />;
     }
   };
 
   return (
-    <div className="min-h-[calc(100vh-8rem)]">
-      {/* Report tabs */}
-      <div className="border-b bg-card px-4 pt-3">
-        <div className="flex items-center gap-2 mb-2">
-          <BarChart3 className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-bold text-foreground">Reports</h2>
+    <div className="flex min-h-[calc(100vh-8rem)]">
+      {/* Sidebar Navigation */}
+      <aside
+        className={cn(
+          "border-r bg-card flex-shrink-0 transition-all duration-200 overflow-y-auto",
+          sidebarOpen ? "w-56" : "w-0 md:w-12"
+        )}
+      >
+        {/* Sidebar header */}
+        <div className="flex items-center justify-between px-3 py-3 border-b">
+          {sidebarOpen && (
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              <span className="text-sm font-bold text-foreground">Reports</span>
+            </div>
+          )}
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            title={sidebarOpen ? "Collapse" : "Expand"}
+          >
+            {sidebarOpen ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg>
+            )}
+          </button>
         </div>
-        <div className="flex overflow-x-auto gap-0 -mb-px">
-          {reportNavItems.map((item) => (
-            <button
-              key={item.key}
-              onClick={() => setActiveReport(item.key)}
-              className={cn(
-                "flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[13px] transition-colors border-b-2 shrink-0",
-                activeReport === item.key
-                  ? "border-b-primary text-primary font-medium"
-                  : "border-b-transparent text-muted-foreground hover:text-foreground hover:border-b-muted-foreground/30"
-              )}
-            >
-              <item.icon className="h-3.5 w-3.5 shrink-0" />
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
-      {/* Content */}
-      <div className="p-4 lg:p-6">
-        {renderReport()}
+        {/* Groups */}
+        <nav className="py-2">
+          {reportGroups.map((group) => (
+            <div key={group.label} className="mb-1">
+              {sidebarOpen && (
+                <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  {group.label}
+                </p>
+              )}
+              {group.items.map((item) => {
+                const isActive = activeReport === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => setActiveReport(item.key)}
+                    title={!sidebarOpen ? item.label : undefined}
+                    className={cn(
+                      "flex w-full items-center gap-2 px-3 py-1.5 text-[13px] transition-colors rounded-none",
+                      isActive
+                        ? "bg-primary/10 text-primary font-medium border-l-2 border-primary"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground border-l-2 border-transparent",
+                      !sidebarOpen && "justify-center px-0"
+                    )}
+                  >
+                    <item.icon className="h-3.5 w-3.5 shrink-0" />
+                    {sidebarOpen && <span className="truncate">{item.label}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+      </aside>
+
+      {/* Mobile top nav (horizontal scroll) */}
+      <div className="flex flex-1 flex-col min-w-0">
+        <div className="md:hidden border-b bg-card px-2 py-1.5 overflow-x-auto">
+          <div className="flex gap-1">
+            {allReportItems.map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setActiveReport(item.key)}
+                className={cn(
+                  "flex items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs transition-colors shrink-0",
+                  activeReport === item.key
+                    ? "bg-primary text-primary-foreground font-medium"
+                    : "text-muted-foreground hover:bg-accent"
+                )}
+              >
+                <item.icon className="h-3 w-3" />
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Content header */}
+        <div className="px-4 lg:px-6 pt-4 pb-2 flex items-center gap-2">
+          {activeItem && <activeItem.icon className="h-5 w-5 text-primary" />}
+          <h2 className="text-lg font-bold text-foreground">{activeItem?.label ?? "Reports"}</h2>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 px-4 lg:px-6 pb-6">
+          {renderReport()}
+        </div>
       </div>
     </div>
   );
