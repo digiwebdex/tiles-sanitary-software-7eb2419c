@@ -226,6 +226,48 @@ export const challanService = {
   },
 
   /**
+   * Update challan details (transport, notes, date)
+   */
+  async update(challanId: string, dealerId: string, updates: {
+    challan_date?: string;
+    driver_name?: string;
+    transport_name?: string;
+    vehicle_no?: string;
+    notes?: string;
+  }) {
+    await assertDealerId(dealerId);
+
+    const { data: challan, error: fetchErr } = await supabase
+      .from("challans")
+      .select("id, status")
+      .eq("id", challanId)
+      .eq("dealer_id", dealerId)
+      .single();
+    if (fetchErr || !challan) throw new Error("Challan not found");
+    if ((challan as any).status === "cancelled") throw new Error("Cannot edit a cancelled challan");
+
+    const { error } = await supabase
+      .from("challans")
+      .update({
+        challan_date: updates.challan_date,
+        driver_name: updates.driver_name || null,
+        transport_name: updates.transport_name || null,
+        vehicle_no: updates.vehicle_no || null,
+        notes: updates.notes || null,
+      } as any)
+      .eq("id", challanId);
+    if (error) throw new Error(error.message);
+
+    await logAudit({
+      dealer_id: dealerId,
+      action: "challan_update",
+      table_name: "challans",
+      record_id: challanId,
+      new_data: updates,
+    });
+  },
+
+  /**
    * Cancel challan: restore reserved stock to available
    */
   async cancelChallan(challanId: string, dealerId: string) {
