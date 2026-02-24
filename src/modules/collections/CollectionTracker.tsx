@@ -14,8 +14,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Search, Wallet, AlertTriangle, CheckCircle, DollarSign, TrendingDown } from "lucide-react";
+import { Search, Wallet, AlertTriangle, CheckCircle, DollarSign, TrendingDown, CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface CustomerOutstanding {
   id: string;
@@ -26,7 +29,7 @@ interface CustomerOutstanding {
   last_payment_date: string | null;
   total_sales: number;
   total_paid: number;
-  invoices: { invoice_number: string; sale_id: string }[];
+  invoices: { invoice_number: string; sale_id: string; sale_date: string }[];
 }
 
 interface CollectionEntry {
@@ -46,6 +49,8 @@ export default function CollectionTracker({ dealerId }: { dealerId: string }) {
   const [payDialog, setPayDialog] = useState<{ open: boolean; customer?: CustomerOutstanding }>({ open: false });
   const [payAmount, setPayAmount] = useState("");
   const [payNote, setPayNote] = useState("");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
 
   // Fetch all customers with outstanding balances
   const { data: customers = [], isLoading } = useQuery({
@@ -78,11 +83,11 @@ export default function CollectionTracker({ dealerId }: { dealerId: string }) {
       const sales = salesRes.data ?? [];
 
       // Map all invoices per customer
-      const invoiceMap = new Map<string, { invoice_number: string; sale_id: string }[]>();
+      const invoiceMap = new Map<string, { invoice_number: string; sale_id: string; sale_date: string }[]>();
       for (const s of sales) {
         if (s.invoice_number) {
           const arr = invoiceMap.get(s.customer_id) ?? [];
-          arr.push({ invoice_number: s.invoice_number, sale_id: s.id });
+          arr.push({ invoice_number: s.invoice_number, sale_id: s.id, sale_date: s.sale_date });
           invoiceMap.set(s.customer_id, arr);
         }
       }
@@ -188,6 +193,18 @@ export default function CollectionTracker({ dealerId }: { dealerId: string }) {
       (c.phone && c.phone.includes(search))
   );
 
+  // Apply date range filter — filter customers who have at least one invoice in range
+  const dateFiltered = (dateFrom || dateTo)
+    ? filtered.filter((c) =>
+        c.invoices.some((inv) => {
+          const d = inv.sale_date;
+          if (dateFrom && d < format(dateFrom, "yyyy-MM-dd")) return false;
+          if (dateTo && d > format(dateTo, "yyyy-MM-dd")) return false;
+          return true;
+        })
+      )
+    : filtered;
+
   const totalOutstanding = customers.reduce((s, c) => s + c.outstanding, 0);
   const totalCollectedToday = recentCollections
     .filter((c) => c.entry_date === new Date().toISOString().split("T")[0])
@@ -236,15 +253,44 @@ export default function CollectionTracker({ dealerId }: { dealerId: string }) {
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search customer name or phone..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      {/* Search & Date Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search customer name or phone..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className={cn("gap-1.5 text-xs", !dateFrom && "text-muted-foreground")}>
+              <CalendarIcon className="h-3.5 w-3.5" />
+              {dateFrom ? format(dateFrom, "dd MMM yyyy") : "From"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus className={cn("p-3 pointer-events-auto")} />
+          </PopoverContent>
+        </Popover>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className={cn("gap-1.5 text-xs", !dateTo && "text-muted-foreground")}>
+              <CalendarIcon className="h-3.5 w-3.5" />
+              {dateTo ? format(dateTo, "dd MMM yyyy") : "To"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={dateTo} onSelect={setDateTo} initialFocus className={cn("p-3 pointer-events-auto")} />
+          </PopoverContent>
+        </Popover>
+        {(dateFrom || dateTo) && (
+          <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => { setDateFrom(undefined); setDateTo(undefined); }}>
+            <X className="h-3.5 w-3.5" /> Clear
+          </Button>
+        )}
       </div>
 
       {/* Outstanding Customers Table */}
@@ -270,10 +316,10 @@ export default function CollectionTracker({ dealerId }: { dealerId: string }) {
               <TableBody>
                 {isLoading ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
-                ) : filtered.length === 0 ? (
+                ) : dateFiltered.length === 0 ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No outstanding balances found</TableCell></TableRow>
                 ) : (
-                  filtered.map((c) => (
+                  dateFiltered.map((c) => (
                     <TableRow key={c.id}>
                       <TableCell>
                         <div>
