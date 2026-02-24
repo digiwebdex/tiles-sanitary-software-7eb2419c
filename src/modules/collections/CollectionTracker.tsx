@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Search, Wallet, AlertTriangle, CheckCircle, DollarSign, TrendingDown, CalendarIcon, X } from "lucide-react";
+import { Search, Wallet, AlertTriangle, CheckCircle, DollarSign, TrendingDown, CalendarIcon, X, Download } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
@@ -210,10 +210,38 @@ export default function CollectionTracker({ dealerId }: { dealerId: string }) {
     .filter((c) => c.entry_date === new Date().toISOString().split("T")[0])
     .reduce((s, c) => s + c.amount, 0);
 
+  const exportCSV = () => {
+    const rows = [
+      ["Customer", "Phone", "Type", "Invoice Numbers", "Total Sales", "Paid", "Outstanding", "Last Payment"],
+      ...dateFiltered.map((c) => [
+        c.name,
+        c.phone || "",
+        c.type,
+        c.invoices.map((i) => i.invoice_number).join("; "),
+        c.total_sales.toString(),
+        c.total_paid.toString(),
+        c.outstanding.toString(),
+        c.last_payment_date ? format(new Date(c.last_payment_date), "dd MMM yyyy") : "",
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((v) => `"${v}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `payments-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("CSV exported successfully");
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Payment Collections</h1>
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={exportCSV}>
+          <Download className="h-4 w-4" /> Export CSV
+        </Button>
       </div>
 
       {/* Summary Cards */}
