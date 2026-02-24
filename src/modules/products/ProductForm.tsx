@@ -52,6 +52,9 @@ const ProductForm = ({ defaultValues, onSubmit, isLoading }: ProductFormProps) =
       default_sale_rate: 0,
       reorder_level: 0,
       active: true,
+      material: "",
+      weight: "",
+      warranty: "",
       ...defaultValues,
     },
   });
@@ -207,9 +210,50 @@ const ProductForm = ({ defaultValues, onSubmit, isLoading }: ProductFormProps) =
               )}
 
               {category === "sanitary" && (
-                <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                  Unit: <span className="font-medium text-foreground">Piece</span> (auto-set for sanitary items)
-                </div>
+                <>
+                  <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                    Unit: <span className="font-medium text-foreground">Piece</span> (auto-set for sanitary items)
+                  </div>
+
+                  <Separator />
+
+                  <FormField
+                    control={form.control}
+                    name="material"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Material</FormLabel>
+                        <FormControl><Input placeholder="e.g. Ceramic, Porcelain, Stainless Steel" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="weight"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Weight</FormLabel>
+                          <FormControl><Input placeholder="e.g. 5 kg" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="warranty"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Warranty</FormLabel>
+                          <FormControl><Input placeholder="e.g. 1 Year, 5 Years" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </>
               )}
 
                 <div className="grid grid-cols-2 gap-4">

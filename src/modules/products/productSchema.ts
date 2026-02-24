@@ -13,6 +13,9 @@ export const productSchema = z
     default_sale_rate: z.coerce.number().min(0, "Rate must be ≥ 0"),
     reorder_level: z.coerce.number().int().min(0, "Reorder level must be ≥ 0"),
     active: z.boolean().default(true),
+    material: z.string().trim().max(50).optional().or(z.literal("")),
+    weight: z.string().trim().max(30).optional().or(z.literal("")),
+    warranty: z.string().trim().max(50).optional().or(z.literal("")),
   })
   .superRefine((data, ctx) => {
     if (data.unit_type === "box_sft" && (!data.per_box_sft || data.per_box_sft <= 0)) {
@@ -26,6 +29,9 @@ export const productSchema = z
   .transform((data) => ({
     ...data,
     per_box_sft: data.unit_type === "piece" ? null : data.per_box_sft,
+    material: data.category === "sanitary" ? data.material : undefined,
+    weight: data.category === "sanitary" ? data.weight : undefined,
+    warranty: data.category === "sanitary" ? data.warranty : undefined,
   }));
 
 export type ProductFormValues = z.infer<typeof productSchema>;

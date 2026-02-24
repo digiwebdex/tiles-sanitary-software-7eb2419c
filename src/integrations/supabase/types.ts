@@ -820,12 +820,15 @@ export type Database = {
           dealer_id: string
           default_sale_rate: number
           id: string
+          material: string | null
           name: string
           per_box_sft: number | null
           reorder_level: number
           size: string | null
           sku: string
           unit_type: Database["public"]["Enums"]["unit_type"]
+          warranty: string | null
+          weight: string | null
         }
         Insert: {
           active?: boolean
@@ -837,12 +840,15 @@ export type Database = {
           dealer_id: string
           default_sale_rate?: number
           id?: string
+          material?: string | null
           name: string
           per_box_sft?: number | null
           reorder_level?: number
           size?: string | null
           sku: string
           unit_type?: Database["public"]["Enums"]["unit_type"]
+          warranty?: string | null
+          weight?: string | null
         }
         Update: {
           active?: boolean
@@ -854,12 +860,15 @@ export type Database = {
           dealer_id?: string
           default_sale_rate?: number
           id?: string
+          material?: string | null
           name?: string
           per_box_sft?: number | null
           reorder_level?: number
           size?: string | null
           sku?: string
           unit_type?: Database["public"]["Enums"]["unit_type"]
+          warranty?: string | null
+          weight?: string | null
         }
         Relationships: [
           {
