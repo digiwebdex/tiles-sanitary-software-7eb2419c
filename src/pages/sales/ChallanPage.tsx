@@ -11,11 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Printer, Truck, FileCheck, X, Layout, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Printer, Truck, FileCheck, X, Layout, Eye, EyeOff, Pencil } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import ModernChallanDocument from "@/components/challan/ModernChallanDocument";
+import EditChallanDialog from "@/components/challan/EditChallanDialog";
 
 const ChallanPage = () => {
   const { saleId } = useParams<{ saleId: string }>();
@@ -25,6 +26,7 @@ const ChallanPage = () => {
   const { isDealerAdmin } = useAuth();
   const [showPrices, setShowPrices] = useState(false);
   const [template, setTemplate] = useState<string>("classic");
+  const [editOpen, setEditOpen] = useState(false);
   const { data: dealerInfo } = useDealerInfo();
 
   // Sync template from dealer settings
@@ -113,6 +115,17 @@ const ChallanPage = () => {
       queryClient.invalidateQueries({ queryKey: ["sale", saleId] });
       queryClient.invalidateQueries({ queryKey: ["stock"] });
       toast.success("Challan cancelled & stock restored");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const updateChallanMutation = useMutation({
+    mutationFn: (updates: { challan_date: string; driver_name: string; transport_name: string; vehicle_no: string; notes: string }) =>
+      challanService.update(activeChallan?.id ?? challans.find((c: any) => c.status !== "cancelled")?.id ?? "", dealerId, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["challans", saleId] });
+      setEditOpen(false);
+      toast.success("Challan updated successfully");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -232,6 +245,9 @@ const ChallanPage = () => {
           )}
           {activeChallan && (activeChallan as any).status === "pending" && (
             <>
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                <Pencil className="mr-1.5 h-4 w-4" /> Edit
+              </Button>
               <Button variant="outline" size="sm" onClick={() => deliverMutation.mutate(activeChallan.id)} disabled={deliverMutation.isPending}>
                 <Truck className="mr-1.5 h-4 w-4" /> Mark Delivered
               </Button>
@@ -241,9 +257,14 @@ const ChallanPage = () => {
             </>
           )}
           {activeChallan && (activeChallan as any).status === "delivered" && (
-            <Button variant="destructive" size="sm" onClick={() => cancelMutation.mutate(activeChallan.id)} disabled={cancelMutation.isPending}>
-              <X className="mr-1.5 h-4 w-4" /> Cancel
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                <Pencil className="mr-1.5 h-4 w-4" /> Edit
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => cancelMutation.mutate(activeChallan.id)} disabled={cancelMutation.isPending}>
+                <X className="mr-1.5 h-4 w-4" /> Cancel
+              </Button>
+            </>
           )}
           {(saleStatus === "delivered" || saleStatus === "challan_created") && (
             <Button size="sm" onClick={() => convertMutation.mutate()} disabled={convertMutation.isPending}>
@@ -303,6 +324,17 @@ const ChallanPage = () => {
           />
         )}
       </div>
+
+      {/* Edit Challan Dialog */}
+      {activeChallan && (
+        <EditChallanDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          challan={activeChallan}
+          onSave={(updates) => updateChallanMutation.mutate(updates)}
+          isPending={updateChallanMutation.isPending}
+        />
+      )}
     </>
   );
 };
