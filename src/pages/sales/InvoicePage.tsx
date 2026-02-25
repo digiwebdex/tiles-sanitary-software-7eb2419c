@@ -1,20 +1,33 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { salesService } from "@/services/salesService";
 import { supabase } from "@/integrations/supabase/client";
+import { customerLedgerService, cashLedgerService } from "@/services/ledgerService";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer, Download, Pencil, Truck, Mail, CreditCard, Trash2, X, TrendingUp } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Printer, Download, Pencil, Truck, Mail, CreditCard, Trash2, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Separator } from "@/components/ui/separator";
 import { useDealerInfo } from "@/hooks/useDealerInfo";
+import { useDealerId } from "@/hooks/useDealerId";
 import SaleInvoiceDocument from "@/components/sale/SaleInvoiceDocument";
+import { toast } from "sonner";
+import { formatCurrency } from "@/lib/utils";
 
 const InvoicePage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { isDealerAdmin } = useAuth();
   const { data: dealerInfo } = useDealerInfo();
+  const dealerId = useDealerId();
+
+  const [payOpen, setPayOpen] = useState(false);
+  const [payAmount, setPayAmount] = useState("");
+  const [payNote, setPayNote] = useState("");
 
   const { data: sale, isLoading } = useQuery({
     queryKey: ["sale", id],
@@ -34,6 +47,50 @@ const InvoicePage = () => {
     enabled: !!id,
   });
 
+  const paymentMutation = useMutation({
+    mutationFn: async ({ amount, note }: { amount: number; note: string }) => {
+      const customerId = sale?.customer_id;
+      if (!customerId) throw new Error("Customer not found");
+
+      // Record in customer ledger
+      await customerLedgerService.addEntry({
+        dealer_id: dealerId,
+        customer_id: customerId,
+        sale_id: id,
+        type: "payment",
+        amount,
+        description: note || `Payment for Invoice #${sale?.invoice_number ?? id}`,
+      });
+
+      // Record in cash ledger
+      await cashLedgerService.addEntry({
+        dealer_id: dealerId,
+        type: "receipt",
+        amount,
+        description: `Payment from ${(sale as any)?.customers?.name ?? "Customer"}: ${note || "Collection"}`,
+        reference_type: "customer_payment",
+        reference_id: id,
+      });
+
+      // Update sale paid_amount and due_amount
+      const newPaid = Number(sale!.paid_amount) + amount;
+      const newDue = Math.max(0, Number(sale!.total_amount) - Number(sale!.discount) - newPaid);
+      await supabase
+        .from("sales")
+        .update({ paid_amount: newPaid, due_amount: newDue })
+        .eq("id", id!);
+    },
+    onSuccess: () => {
+      toast.success("পেমেন্ট সফলভাবে রেকর্ড হয়েছে");
+      queryClient.invalidateQueries({ queryKey: ["sale", id] });
+      queryClient.invalidateQueries({ queryKey: ["collection-tracker"] });
+      setPayOpen(false);
+      setPayAmount("");
+      setPayNote("");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const handlePrint = () => window.print();
   const handleClose = () => navigate("/sales");
 
@@ -47,6 +104,19 @@ const InvoicePage = () => {
   const paidAmount = Number(sale.paid_amount);
   const totalAmount = Number(sale.total_amount);
   const discountAmount = Number(sale.discount);
+
+  const handlePaySubmit = () => {
+    const amt = parseFloat(payAmount);
+    if (!amt || amt <= 0) {
+      toast.error("সঠিক পরিমাণ লিখুন");
+      return;
+    }
+    if (amt > dueAmount) {
+      toast.error(`বকেয়া ৳${dueAmount.toLocaleString()} এর বেশি দেওয়া যাবে না`);
+      return;
+    }
+    paymentMutation.mutate({ amount: amt, note: payNote });
+  };
 
   return (
     <>
@@ -68,7 +138,7 @@ const InvoicePage = () => {
         }
       `}</style>
 
-      {/* Top bar with Print & Close */}
+      {/* Top bar */}
       <div className="no-print flex items-center justify-end gap-2 border-b bg-background px-6 py-2 sticky top-0 z-10">
         <Button variant="outline" size="icon" className="h-8 w-8" onClick={handlePrint}>
           <Printer className="h-4 w-4" />
@@ -81,24 +151,6 @@ const InvoicePage = () => {
       {/* Invoice paper */}
       <div className="no-print min-h-screen bg-muted/40 py-6 px-4">
         <div id="invoice-print-area" className="mx-auto max-w-3xl bg-background shadow-lg rounded-lg overflow-hidden border">
-        <SaleInvoiceDocument
-          sale={sale}
-          items={items}
-          customer={customer}
-          subtotal={subtotal}
-          totalAmount={totalAmount}
-          discountAmount={discountAmount}
-          paidAmount={paidAmount}
-          dueAmount={dueAmount}
-          isDealerAdmin={isDealerAdmin}
-          dealerInfo={dealerInfo}
-          salesReturns={salesReturns}
-        />
-        </div>
-      </div>
-
-      {/* Print area */}
-      <div id="invoice-print-area" className="hidden print:block">
           <SaleInvoiceDocument
             sale={sale}
             items={items}
@@ -112,11 +164,34 @@ const InvoicePage = () => {
             dealerInfo={dealerInfo}
             salesReturns={salesReturns}
           />
+        </div>
+      </div>
+
+      {/* Print area */}
+      <div id="invoice-print-area" className="hidden print:block">
+        <SaleInvoiceDocument
+          sale={sale}
+          items={items}
+          customer={customer}
+          subtotal={subtotal}
+          totalAmount={totalAmount}
+          discountAmount={discountAmount}
+          paidAmount={paidAmount}
+          dueAmount={dueAmount}
+          isDealerAdmin={isDealerAdmin}
+          dealerInfo={dealerInfo}
+          salesReturns={salesReturns}
+        />
       </div>
 
       {/* Bottom action bar */}
       <div className="no-print sticky bottom-0 z-10 flex items-center justify-center gap-2 border-t bg-background px-4 py-3 flex-wrap">
-        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/collections")}>
+        <Button
+          size="sm"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          onClick={() => setPayOpen(true)}
+          disabled={dueAmount <= 0}
+        >
           <CreditCard className="mr-1.5 h-3.5 w-3.5" /> Payment
         </Button>
         <Button size="sm" variant="outline" onClick={() => navigate("/deliveries")}>
@@ -135,6 +210,96 @@ const InvoicePage = () => {
           <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
         </Button>
       </div>
+
+      {/* Payment Dialog */}
+      <Dialog open={payOpen} onOpenChange={setPayOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-emerald-600" />
+              পেমেন্ট রেকর্ড করুন
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Customer & Due info */}
+            <div className="rounded-lg border bg-muted/50 p-3 space-y-1">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">কাস্টমার</span>
+                <span className="font-medium text-foreground">{customer?.name ?? "—"}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">ইনভয়েস</span>
+                <span className="font-medium text-foreground">#{sale.invoice_number ?? "—"}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">মোট বিল</span>
+                <span className="font-medium text-foreground">৳{totalAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">পরিশোধিত</span>
+                <span className="font-medium text-foreground">৳{paidAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm font-semibold">
+                <span className="text-destructive">বকেয়া</span>
+                <span className="text-destructive">৳{dueAmount.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Amount */}
+            <div className="space-y-2">
+              <Label htmlFor="pay-amount">পরিমাণ (৳)</Label>
+              <Input
+                id="pay-amount"
+                type="number"
+                placeholder={`সর্বোচ্চ ৳${dueAmount.toLocaleString()}`}
+                value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value)}
+                min={1}
+                max={dueAmount}
+              />
+              {/* Quick amount buttons */}
+              <div className="flex gap-2 flex-wrap">
+                {[dueAmount, Math.round(dueAmount / 2), 1000, 5000].filter((v, i, a) => v > 0 && v <= dueAmount && a.indexOf(v) === i).slice(0, 4).map((amt) => (
+                  <Button
+                    key={amt}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => setPayAmount(String(amt))}
+                  >
+                    ৳{amt.toLocaleString()}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Note */}
+            <div className="space-y-2">
+              <Label htmlFor="pay-note">নোট (ঐচ্ছিক)</Label>
+              <Textarea
+                id="pay-note"
+                placeholder="পেমেন্ট সম্পর্কে নোট..."
+                value={payNote}
+                onChange={(e) => setPayNote(e.target.value)}
+                rows={2}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayOpen(false)}>বাতিল</Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={handlePaySubmit}
+              disabled={paymentMutation.isPending}
+            >
+              {paymentMutation.isPending ? "প্রক্রিয়াকরণ..." : "পেমেন্ট নিশ্চিত করুন"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
