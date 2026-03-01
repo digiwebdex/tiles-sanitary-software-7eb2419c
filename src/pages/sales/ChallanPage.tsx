@@ -19,7 +19,7 @@ import ModernChallanDocument from "@/components/challan/ModernChallanDocument";
 
 
 const ChallanPage = () => {
-  const { saleId } = useParams<{ saleId: string }>();
+  const { id: challanId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const dealerId = useDealerId();
   const queryClient = useQueryClient();
@@ -38,17 +38,23 @@ const ChallanPage = () => {
     }
   }, [dealerInfo?.challan_template]);
 
+  // Fetch challan by ID
+  const { data: challanData, isLoading: challanLoading } = useQuery({
+    queryKey: ["challan", challanId],
+    queryFn: () => challanService.getById(challanId!),
+    enabled: !!challanId,
+  });
+
+  const saleId = (challanData as any)?.sale_id;
+
   const { data: sale, isLoading: saleLoading } = useQuery({
     queryKey: ["sale", saleId],
     queryFn: () => salesService.getById(saleId!),
     enabled: !!saleId,
   });
 
-  const { data: challans = [], isLoading: challanLoading } = useQuery({
-    queryKey: ["challans", saleId],
-    queryFn: () => challanService.getBySaleId(saleId!),
-    enabled: !!saleId,
-  });
+  // Wrap single challan into array for compatibility
+  const challans = challanData ? [challanData] : [];
 
   // Sync showPrices from saved challan show_price
   useEffect(() => {
@@ -67,7 +73,7 @@ const ChallanPage = () => {
         .from("challans")
         .update({ show_price: checked } as any)
         .eq("id", active.id);
-      queryClient.invalidateQueries({ queryKey: ["challans", saleId] });
+      queryClient.invalidateQueries({ queryKey: ["challan", challanId] });
     }
   };
 
@@ -80,7 +86,7 @@ const ChallanPage = () => {
         show_price: showPrices,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["challans", saleId] });
+      queryClient.invalidateQueries({ queryKey: ["challan", challanId] });
       queryClient.invalidateQueries({ queryKey: ["sale", saleId] });
       queryClient.invalidateQueries({ queryKey: ["stock"] });
       toast.success("Challan created & stock reserved");
@@ -91,7 +97,7 @@ const ChallanPage = () => {
   const deliverMutation = useMutation({
     mutationFn: (challanId: string) => challanService.markDelivered(challanId, dealerId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["challans", saleId] });
+      queryClient.invalidateQueries({ queryKey: ["challan", challanId] });
       queryClient.invalidateQueries({ queryKey: ["sale", saleId] });
       toast.success("Challan marked as delivered");
     },
@@ -113,7 +119,7 @@ const ChallanPage = () => {
   const cancelMutation = useMutation({
     mutationFn: (challanId: string) => challanService.cancelChallan(challanId, dealerId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["challans", saleId] });
+      queryClient.invalidateQueries({ queryKey: ["challan", challanId] });
       queryClient.invalidateQueries({ queryKey: ["sale", saleId] });
       queryClient.invalidateQueries({ queryKey: ["stock"] });
       toast.success("Challan cancelled & stock restored");
@@ -128,7 +134,7 @@ const ChallanPage = () => {
         items: params.editItems.map(i => ({ id: i.id, product_id: i.product_id, quantity: i.quantity, sale_rate: i.sale_rate })),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["challans", saleId] });
+      queryClient.invalidateQueries({ queryKey: ["challan", challanId] });
       queryClient.invalidateQueries({ queryKey: ["sale", saleId] });
       queryClient.invalidateQueries({ queryKey: ["stock"] });
       setIsEditing(false);
