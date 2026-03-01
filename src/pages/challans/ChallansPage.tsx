@@ -107,7 +107,7 @@ const ChallansPage = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => navigate(`/sales/${c.sale_id}/challan`)}
+                      onClick={() => navigate(`/challans/${c.id}`)}
                     >
                       <Eye className="mr-1 h-4 w-4" /> View
                     </Button>

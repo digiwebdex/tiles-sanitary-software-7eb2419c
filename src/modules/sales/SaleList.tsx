@@ -74,20 +74,6 @@ const SaleList = ({ dealerId }: SaleListProps) => {
     enabled: !!dealerId,
   });
 
-  // Check which sales have challans
-  const { data: challanMap } = useQuery({
-    queryKey: ["sales-challan-check", dealerId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("challans")
-        .select("sale_id")
-        .eq("dealer_id", dealerId);
-      const set = new Set<string>();
-      for (const d of data ?? []) set.add(d.sale_id);
-      return set;
-    },
-    enabled: !!dealerId,
-  });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -204,10 +190,7 @@ const SaleList = ({ dealerId }: SaleListProps) => {
                     <TableRow
                       key={s.id}
                       className="cursor-pointer"
-                      onClick={() => {
-                        const isChallanStatus = isChallan && ["draft", "challan_created", "delivered"].includes(s.sale_status);
-                        navigate(isChallanStatus ? `/sales/${s.id}/challan` : `/sales/${s.id}/invoice`);
-                      }}
+                      onClick={() => navigate(`/sales/${s.id}/invoice`)}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
@@ -256,36 +239,15 @@ const SaleList = ({ dealerId }: SaleListProps) => {
                       )}
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <SaleActionDropdown
-                          saleType={s.sale_type}
-                          saleStatus={s.sale_status}
+                          saleId={s.id}
                           hasPaid={paid > 0}
                           hasDelivery={deliveryMap?.has(s.id) ?? false}
-                          hasChallan={challanMap?.has(s.id) ?? false}
-                          onViewDetails={() => navigate(`/sales/${s.id}/invoice`)}
-                          onViewInvoice={() => navigate(`/sales/${s.id}/invoice`)}
-                          onViewChallan={() => navigate(`/sales/${s.id}/challan`)}
-                          onViewPayments={() => navigate(`/sales/${s.id}/invoice`)}
-                          onViewDeliveryStatus={() => navigate(`/deliveries`)}
+                          onViewSale={() => navigate(`/sales/${s.id}/invoice`)}
                           onAddPayment={() => navigate(`/sales/${s.id}/invoice`)}
-                          onViewPaymentHistory={() => navigate(`/sales/${s.id}/invoice`)}
-                          onPrintReceipt={() => navigate(`/sales/${s.id}/invoice`)}
-                          onSendReminder={() => navigate(`/sales/${s.id}/invoice`)}
+                          onViewInvoice={() => navigate(`/sales/${s.id}/invoice`)}
+                          onViewDeliveryStatus={() => navigate(`/deliveries`)}
                           onAddDelivery={() => setDeliverySale(s)}
-                          onViewDelivery={() => navigate(`/deliveries`)}
-                          onMarkDelivered={() => {
-                            toast.info("Use delivery management to update status");
-                            navigate(`/deliveries`);
-                          }}
-                          onPrintChallan={() => navigate(`/sales/${s.id}/challan`)}
-                          onDownloadInvoice={() => navigate(`/sales/${s.id}/invoice`)}
-                          onDownloadChallan={() => navigate(`/sales/${s.id}/challan`)}
-                          onEmailInvoice={() => toast.info("Email invoice from the invoice page")}
                           onEditSale={() => navigate(`/sales/${s.id}/edit`)}
-                          onConvertToInvoice={() => navigate(`/sales/${s.id}/invoice`)}
-                          onDuplicateSale={() => navigate(`/sales/new`)}
-                          onReturnFull={() => navigate(`/sales-returns/new`)}
-                          onReturnPartial={() => navigate(`/sales-returns/new`)}
-                          onCancelSale={() => toast.info("Cancel via edit page")}
                           onDeleteSale={() => setDeleteSale(s)}
                         />
                       </TableCell>

@@ -258,6 +258,25 @@ export const salesService = {
       },
     });
 
+    // Auto-create challan record linked to sale
+    const { count: challanCount } = await supabase
+      .from("challans")
+      .select("id", { count: "exact", head: true })
+      .eq("dealer_id", input.dealer_id);
+    const challanNo = `CH-${String((challanCount ?? 0) + 1).padStart(5, "0")}`;
+
+    await supabase
+      .from("challans")
+      .insert({
+        dealer_id: input.dealer_id,
+        sale_id: sale!.id,
+        challan_no: challanNo,
+        challan_date: input.sale_date,
+        status: "pending",
+        created_by: input.created_by || null,
+        show_price: false,
+      } as any);
+
     // Fire-and-forget: notify owner via SMS/Email + customer SMS
     // Non-blocking — sale is already committed; notification failure must never surface to user
     void (async () => {

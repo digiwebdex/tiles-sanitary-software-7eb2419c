@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { salesService } from "@/services/salesService";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,9 +7,10 @@ import { customerLedgerService, cashLedgerService } from "@/services/ledgerServi
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Printer, Download, Pencil, Truck, Mail, CreditCard, Trash2, X } from "lucide-react";
+import { Printer, Download, Pencil, Truck, Mail, CreditCard, Trash2, X, FileText } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDealerInfo } from "@/hooks/useDealerInfo";
 import { useDealerId } from "@/hooks/useDealerId";
@@ -43,6 +44,22 @@ const InvoicePage = () => {
         .select("id, qty, refund_amount, return_date, reason, is_broken, product_id, products(name)")
         .eq("sale_id", id!);
       return data ?? [];
+    },
+    enabled: !!id,
+  });
+
+  // Fetch linked challan for this sale
+  const { data: linkedChallan } = useQuery({
+    queryKey: ["sale-challan-link", id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("challans")
+        .select("id, challan_no, status")
+        .eq("sale_id", id!)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
     },
     enabled: !!id,
   });
@@ -139,13 +156,25 @@ const InvoicePage = () => {
       `}</style>
 
       {/* Top bar */}
-      <div className="no-print flex items-center justify-end gap-2 border-b bg-background px-6 py-2 sticky top-0 z-10">
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={handlePrint}>
-          <Printer className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon" onClick={handleClose} className="h-8 w-8">
-          <X className="h-4 w-4" />
-        </Button>
+      <div className="no-print flex items-center justify-between gap-2 border-b bg-background px-6 py-2 sticky top-0 z-10">
+        <div className="flex items-center gap-2">
+          {linkedChallan && (
+            <Link to={`/challans/${linkedChallan.id}`}>
+              <Badge variant="outline" className="cursor-pointer bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 gap-1">
+                <FileText className="h-3 w-3" />
+                Challan Created ({linkedChallan.challan_no})
+              </Badge>
+            </Link>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={handlePrint}>
+            <Printer className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={handleClose} className="h-8 w-8">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Invoice paper */}
