@@ -9,10 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import Pagination from "@/components/Pagination";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Copy, ToggleLeft, ToggleRight, ShoppingCart, BookOpen } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 const PAGE_SIZE = 25;
 
@@ -43,6 +47,21 @@ const SupplierList = () => {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const handleDuplicate = async (s: any) => {
+    try {
+      const { id, created_at, ...rest } = s;
+      await supabase.from("suppliers").insert({
+        ...rest,
+        name: `${s.name} (Copy)`,
+        opening_balance: 0,
+      });
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      toast.success("Supplier duplicated");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -68,7 +87,7 @@ const SupplierList = () => {
         <p className="text-muted-foreground">No suppliers found.</p>
       ) : (
         <>
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -78,12 +97,12 @@ const SupplierList = () => {
                   <TableHead>Email</TableHead>
                   <TableHead className="text-right">Opening Bal.</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-20 text-center">Actions</TableHead>
+                  <TableHead className="w-24">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {suppliers.map((s) => (
-                  <TableRow key={s.id} className={s.status === "inactive" ? "opacity-60" : ""}>
+                  <TableRow key={s.id} className={`cursor-pointer ${s.status === "inactive" ? "opacity-60" : ""}`} onClick={() => navigate(`/suppliers/${s.id}/edit`)}>
                     <TableCell className="font-medium">
                       <div>{s.name}</div>
                       {s.gstin && <div className="text-xs text-muted-foreground">{s.gstin}</div>}
@@ -94,7 +113,7 @@ const SupplierList = () => {
                     <TableCell className="text-sm">{s.phone ?? "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {s.email ? (
-                        <a href={`mailto:${s.email}`} className="hover:underline">
+                        <a href={`mailto:${s.email}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
                           {s.email}
                         </a>
                       ) : "—"}
@@ -107,34 +126,51 @@ const SupplierList = () => {
                         {s.status === "active" ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          title="Edit supplier"
-                          onClick={() => navigate(`/suppliers/${s.id}/edit`)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          title={s.status === "active" ? "Disable supplier" : "Enable supplier"}
-                          onClick={() =>
-                            toggleMutation.mutate({
-                              id: s.id,
-                              status: s.status === "active" ? "inactive" : "active",
-                            })
-                          }
-                        >
-                          {s.status === "active" ? (
-                            <ToggleRight className="h-4 w-4 text-primary" />
-                          ) : (
-                            <ToggleLeft className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </Button>
-                      </div>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline" className="h-8 px-3 text-xs">
+                            Actions
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => navigate(`/suppliers/${s.id}/edit`)}>
+                            <Eye className="mr-2 h-4 w-4" /> View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/suppliers/${s.id}/edit`)}>
+                            <Pencil className="mr-2 h-4 w-4" /> Edit Supplier
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDuplicate(s)}>
+                            <Copy className="mr-2 h-4 w-4" /> Duplicate Supplier
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => navigate(`/purchases/new`)}>
+                            <ShoppingCart className="mr-2 h-4 w-4" /> Add Purchase
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/ledger?tab=supplier&supplier=${s.id}`)}>
+                            <BookOpen className="mr-2 h-4 w-4" /> View Ledger
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() =>
+                              toggleMutation.mutate({
+                                id: s.id,
+                                status: s.status === "active" ? "inactive" : "active",
+                              })
+                            }
+                          >
+                            {s.status === "active" ? (
+                              <>
+                                <ToggleLeft className="mr-2 h-4 w-4" /> Deactivate
+                              </>
+                            ) : (
+                              <>
+                                <ToggleRight className="mr-2 h-4 w-4" /> Activate
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}

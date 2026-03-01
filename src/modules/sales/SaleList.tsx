@@ -12,7 +12,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   Plus, Search, FileText, Truck, Pencil, Eye, RotateCcw,
@@ -230,12 +230,14 @@ const SaleList = ({ dealerId }: SaleListProps) => {
                                 <Package className="mr-2 h-4 w-4" /> Packing List
                               </DropdownMenuItem>
                             )}
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => setDeliverySale(s)}>
                               <Truck className="mr-2 h-4 w-4" /> Add Delivery
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => navigate(`/sales/${s.id}/invoice`)}>
                               <Download className="mr-2 h-4 w-4" /> Download as PDF
                             </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => navigate(`/sales-returns/new`)}>
                               <RotateCcw className="mr-2 h-4 w-4" /> Return Sale
                             </DropdownMenuItem>
