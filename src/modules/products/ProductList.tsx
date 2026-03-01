@@ -145,10 +145,14 @@ const ProductList = ({ dealerId }: ProductListProps) => {
 
   const handleDuplicate = async (p: typeof products[0]) => {
     try {
+      // Generate unique SKU with random suffix
+      const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const newSku = `${p.sku}-${suffix}`;
+
       await productService.create({
         dealer_id: dealerId,
         name: `${p.name} (Copy)`,
-        sku: `${p.sku}-COPY`,
+        sku: newSku,
         category: p.category,
         unit_type: p.unit_type,
         per_box_sft: p.per_box_sft,
@@ -157,9 +161,12 @@ const ProductList = ({ dealerId }: ProductListProps) => {
         brand: p.brand,
         size: p.size,
         color: p.color,
+        material: p.material,
+        weight: p.weight,
+        warranty: p.warranty,
       });
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      toast.success("Product duplicated");
+      toast.success("Product duplicated successfully.");
     } catch (e: any) {
       toast.error(e.message);
     }
