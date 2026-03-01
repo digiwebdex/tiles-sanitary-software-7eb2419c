@@ -21,7 +21,7 @@ export const productService = {
       .range(from, to);
 
     if (search?.trim()) {
-      query = query.or(`sku.ilike.%${search.trim()}%,name.ilike.%${search.trim()}%`);
+      query = query.or(`sku.ilike.%${search.trim()}%,name.ilike.%${search.trim()}%,barcode.ilike.%${search.trim()}%`);
     }
 
     const { data, error, count } = await query;
