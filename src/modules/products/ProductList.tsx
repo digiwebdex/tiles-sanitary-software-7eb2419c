@@ -367,25 +367,9 @@ const ProductList = ({ dealerId }: ProductListProps) => {
                       <TableCell onClick={(e) => e.stopPropagation()} className="sticky right-0 bg-background z-10">
                         <ProductActionDropdown
                           onViewDetails={() => setDetailProduct(p)}
-                          onViewImage={() => toast.info("Product image viewer coming soon")}
-                          onViewStockSummary={() => setStockSummaryProduct(p)}
-                          onViewStockMovement={() => setMovementProduct(p)}
-                          onViewPurchaseHistory={() => setPurchaseHistoryProduct(p)}
-                          onViewSalesHistory={() => setSalesHistoryProduct(p)}
-                          onViewPriceHistory={() => toast.info("Price history coming soon")}
                           onEdit={() => navigate(`/products/${p.id}/edit`)}
                           onDuplicate={() => handleDuplicate(p)}
-                          onUpdateSalePrice={() => setSalePriceProduct(p)}
-                          onUpdateCostPrice={() => setCostPriceProduct(p)}
-                          onChangeBarcode={() => setBarcodeChangeProduct(p)}
-                          onAdjustStock={() => setAdjustStockProduct(p)}
-                          onPrintBarcode={() => openSingleBarcode(p)}
-                          onPrintPriceLabel={() => openSingleBarcode(p)}
-                          onPrintProductCard={() => toast.info("Product card print coming soon")}
-                          onToggleActive={() => toggleMutation.mutate({ id: p.id, active: !p.active })}
-                          onSetReorderLevel={() => setReorderProduct(p)}
                           onDelete={() => setDeleteProduct(p)}
-                          isActive={p.active}
                           canDelete={!hasTx}
                         />
                       </TableCell>
