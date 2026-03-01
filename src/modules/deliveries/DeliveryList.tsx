@@ -12,7 +12,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import Pagination from "@/components/Pagination";
 import { useToast } from "@/hooks/use-toast";
@@ -185,23 +185,24 @@ const DeliveryList = ({ dealerId }: DeliveryListProps) => {
                               <Eye className="mr-2 h-4 w-4" /> Delivery Details
                             </DropdownMenuItem>
                             {d.status !== "delivered" && (
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  updateMutation.mutate({
-                                    id: d.id,
-                                    status: d.status === "pending" ? "in_transit" : "delivered",
-                                  })
-                                }
-                              >
-                                <Pencil className="mr-2 h-4 w-4" />
-                                {d.status === "pending" ? "Mark In Transit" : "Mark Delivered"}
-                              </DropdownMenuItem>
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    updateMutation.mutate({
+                                      id: d.id,
+                                      status: d.status === "pending" ? "in_transit" : "delivered",
+                                    })
+                                  }
+                                >
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  {d.status === "pending" ? "Mark In Transit" : "Mark Delivered"}
+                                </DropdownMenuItem>
+                              </>
                             )}
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem>
                               <Download className="mr-2 h-4 w-4" /> Download as PDF
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete Delivery
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

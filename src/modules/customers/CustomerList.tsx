@@ -12,9 +12,12 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import Pagination from "@/components/Pagination";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Copy, ToggleLeft, ToggleRight, BookOpen, ShoppingCart, CreditCard } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { CreditStatusBadge } from "@/components/CreditStatusBadge";
@@ -51,7 +54,6 @@ const CustomerList = () => {
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  // Fetch customer due balances for all customers on this page
   const { data: ledgerSums = {} } = useQuery({
     queryKey: ["customer-due-balances", dealerId, customers.map((c) => c.id)],
     queryFn: async () => {
@@ -87,6 +89,21 @@ const CustomerList = () => {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const handleDuplicate = async (c: any) => {
+    try {
+      const { id, created_at, ...rest } = c;
+      await supabase.from("customers").insert({
+        ...rest,
+        name: `${c.name} (Copy)`,
+        opening_balance: 0,
+      });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      toast.success("Customer duplicated");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -96,7 +113,6 @@ const CustomerList = () => {
         </Button>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -129,7 +145,7 @@ const CustomerList = () => {
         <p className="text-muted-foreground">No customers found.</p>
       ) : (
         <>
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -141,7 +157,7 @@ const CustomerList = () => {
                   <TableHead className="text-right">Due Balance</TableHead>
                   <TableHead>Credit</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-20 text-center">Actions</TableHead>
+                  <TableHead className="w-24">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -188,34 +204,54 @@ const CustomerList = () => {
                           {c.status === "active" ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            title="Edit customer"
-                            onClick={() => navigate(`/customers/${c.id}/edit`)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            title={c.status === "active" ? "Disable customer" : "Enable customer"}
-                            onClick={() =>
-                              toggleMutation.mutate({
-                                id: c.id,
-                                status: c.status === "active" ? "inactive" : "active",
-                              })
-                            }
-                          >
-                            {c.status === "active" ? (
-                              <ToggleRight className="h-4 w-4 text-primary" />
-                            ) : (
-                              <ToggleLeft className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </Button>
-                        </div>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline" className="h-8 px-3 text-xs">
+                              Actions
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => navigate(`/customers/${c.id}/edit`)}>
+                              <Eye className="mr-2 h-4 w-4" /> View Profile
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/customers/${c.id}/edit`)}>
+                              <Pencil className="mr-2 h-4 w-4" /> Edit Customer
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDuplicate(c)}>
+                              <Copy className="mr-2 h-4 w-4" /> Duplicate Customer
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => navigate(`/sales/new`)}>
+                              <ShoppingCart className="mr-2 h-4 w-4" /> Add Sale
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/collections`)}>
+                              <CreditCard className="mr-2 h-4 w-4" /> Add Payment
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/ledger?customer=${c.id}`)}>
+                              <BookOpen className="mr-2 h-4 w-4" /> View Ledger
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() =>
+                                toggleMutation.mutate({
+                                  id: c.id,
+                                  status: c.status === "active" ? "inactive" : "active",
+                                })
+                              }
+                            >
+                              {c.status === "active" ? (
+                                <>
+                                  <ToggleLeft className="mr-2 h-4 w-4" /> Deactivate
+                                </>
+                              ) : (
+                                <>
+                                  <ToggleRight className="mr-2 h-4 w-4" /> Activate
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   );
