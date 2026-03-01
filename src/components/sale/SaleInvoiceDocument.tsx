@@ -212,23 +212,56 @@ const SaleInvoiceDocument = ({
         <p>Date: {sale.sale_date}</p>
       </div>
 
-      {/* Profit Summary — Owner only, hidden from print */}
+      {/* Profit Breakdown — Owner only, hidden from print */}
       {isDealerAdmin && (
         <div className="no-print mx-6 mb-4 rounded border border-blue-200 bg-blue-50 p-4">
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp className="h-4 w-4 text-blue-700" />
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Profit Summary (Owner Only — Not Printed)</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Profit Breakdown (Owner Only — Not Printed)</p>
           </div>
+
+          {/* Detailed Breakdown Table */}
+          <div className="rounded-md border border-blue-100 bg-white mb-3 text-sm">
+            <table className="w-full">
+              <tbody>
+                <ProfitRow label="Sale Amount" value={formatCurrency(totalAmount)} />
+                <ProfitRow label="(-) Discount" value={discountAmount > 0 ? `(${formatCurrency(discountAmount)})` : "—"} muted={discountAmount <= 0} />
+                <ProfitRow label="Net Sale Amount" value={formatCurrency(totalAmount - discountAmount)} bold />
+                <ProfitRow label="(-) Cost Amount (COGS)" value={formatCurrency(Number((sale as any).cogs) || 0)} sub />
+                <ProfitRow
+                  label="= Gross Profit"
+                  value={formatCurrency(Number((sale as any).gross_profit) || 0)}
+                  bold
+                  color={Number((sale as any).gross_profit) >= 0 ? "text-green-700" : "text-destructive"}
+                />
+                <ProfitRow
+                  label="(-) Expense Impact"
+                  value={formatCurrency(Math.max(0, (Number((sale as any).gross_profit) || 0) - (Number((sale as any).net_profit) || 0)))}
+                  sub
+                />
+                <ProfitRow
+                  label="= Net Profit"
+                  value={formatCurrency(Number((sale as any).net_profit) || 0)}
+                  bold
+                  color={Number((sale as any).net_profit) >= 0 ? "text-green-700" : "text-destructive"}
+                />
+              </tbody>
+            </table>
+          </div>
+
+          {/* Summary Cards */}
           <div className="grid grid-cols-4 gap-3 text-center text-sm">
-            <ProfitCard label="COGS" value={formatCurrency((sale as any).cogs ?? 0)} color="text-destructive" />
-            <ProfitCard label="Gross Profit" value={formatCurrency((sale as any).gross_profit ?? 0)} color={Number((sale as any).gross_profit) >= 0 ? "text-green-700" : "text-destructive"} />
-            <ProfitCard label="Net Profit" value={formatCurrency((sale as any).net_profit ?? 0)} color={Number((sale as any).net_profit) >= 0 ? "text-green-700" : "text-destructive"} />
+            <ProfitCard label="COGS" value={formatCurrency(Number((sale as any).cogs) || 0)} color="text-destructive" />
+            <ProfitCard label="Gross Profit" value={formatCurrency(Number((sale as any).gross_profit) || 0)} color={Number((sale as any).gross_profit) >= 0 ? "text-green-700" : "text-destructive"} />
+            <ProfitCard label="Net Profit" value={formatCurrency(Number((sale as any).net_profit) || 0)} color={Number((sale as any).net_profit) >= 0 ? "text-green-700" : "text-destructive"} />
             <ProfitCard
               label="Margin %"
               value={Number(sale.total_amount) > 0 ? `${((Number((sale as any).net_profit) / Number(sale.total_amount)) * 100).toFixed(1)}%` : "—"}
               color={Number(sale.total_amount) > 0 && Number((sale as any).net_profit) >= 0 ? "text-green-700" : "text-destructive"}
             />
           </div>
+
+          <p className="text-[10px] text-blue-500 mt-2">* Cost calculated using weighted average cost per SFT for tile products</p>
         </div>
       )}
 
@@ -255,6 +288,13 @@ const ProfitCard = ({ label, value, color }: { label: string; value: string; col
     <p className="text-xs text-muted-foreground uppercase mb-1">{label}</p>
     <p className={`font-bold ${color}`}>{value}</p>
   </div>
+);
+
+const ProfitRow = ({ label, value, bold, sub, muted, color }: { label: string; value: string; bold?: boolean; sub?: boolean; muted?: boolean; color?: string }) => (
+  <tr className={bold ? "bg-blue-50/50 font-semibold" : ""}>
+    <td className={`px-3 py-1.5 ${sub ? "pl-6 text-muted-foreground" : ""} ${muted ? "text-muted-foreground" : ""}`}>{label}</td>
+    <td className={`px-3 py-1.5 text-right ${color ?? ""} ${bold ? "font-bold" : ""} ${muted ? "text-muted-foreground" : ""}`}>{value}</td>
+  </tr>
 );
 
 export default SaleInvoiceDocument;
