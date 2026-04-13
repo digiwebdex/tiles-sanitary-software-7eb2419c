@@ -309,6 +309,35 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
           </CardContent>
         </Card>
 
+        {/* Overdue / Credit Warning */}
+        {overdueInfo && (overdueInfo.isOverdueViolated || overdueInfo.isCreditExceeded) && (
+          <div className="rounded-md border border-destructive/50 bg-destructive/5 px-4 py-3 space-y-1">
+            <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              Credit / Overdue Warning
+            </div>
+            {overdueInfo.isOverdueViolated && (
+              <p className="text-xs text-destructive">
+                ⚠ This customer is <strong>{overdueInfo.daysOverdue} days</strong> overdue (max: {overdueInfo.maxOverdueDays} days).
+              </p>
+            )}
+            {overdueInfo.isCreditExceeded && (
+              <p className="text-xs text-destructive">
+                ⚠ Outstanding <strong>৳{overdueInfo.outstanding.toLocaleString()}</strong> exceeds credit limit of ৳{overdueInfo.creditLimit.toLocaleString()}.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Owner approval may be required. Proceed with caution.
+            </p>
+          </div>
+        )}
+        {overdueInfo && !overdueInfo.isOverdueViolated && !overdueInfo.isCreditExceeded && overdueInfo.outstanding > 0 && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-4 py-2 text-xs text-amber-800 dark:text-amber-200">
+            ℹ Current outstanding: <strong>৳{overdueInfo.outstanding.toLocaleString()}</strong>
+            {overdueInfo.daysOverdue > 0 && <> · {overdueInfo.daysOverdue} days since oldest due</>}
+          </div>
+        )}
+
         {/* Product Search Bar */}
         <Card>
           <CardContent className="pt-5">
