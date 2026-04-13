@@ -375,6 +375,7 @@ function DailySalesCalendar({ dealerId }: { dealerId: string }) {
 function StockReport({ dealerId }: { dealerId: string }) {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const { canViewProfit } = usePermissions();
 
   const { data, isLoading } = useQuery({
     queryKey: ["report-products", dealerId, page, search],
@@ -403,13 +404,13 @@ function StockReport({ dealerId }: { dealerId: string }) {
                     <TableHead>Product Name</TableHead>
                     <TableHead className="text-right">Purchased</TableHead>
                     <TableHead className="text-right">Sold</TableHead>
-                    <TableHead className="text-right">Profit and/or Loss</TableHead>
+                    {canViewProfit && <TableHead className="text-right">Profit and/or Loss</TableHead>}
                     <TableHead className="text-right">Stock (Qty) Amt</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(data?.rows ?? []).length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No products</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={canViewProfit ? 6 : 5} className="text-center text-muted-foreground">No products</TableCell></TableRow>
                   ) : (data?.rows ?? []).map((r) => (
                     <TableRow key={r.productId}>
                       <TableCell className="font-mono text-sm">{r.sku}</TableCell>
@@ -422,9 +423,11 @@ function StockReport({ dealerId }: { dealerId: string }) {
                         <span className="text-muted-foreground">({r.soldQty})</span>{" "}
                         {formatCurrency(r.soldAmount)}
                       </TableCell>
-                      <TableCell className={`text-right font-semibold ${r.profitOrLoss >= 0 ? "text-primary" : "text-destructive"}`}>
-                        {formatCurrency(r.profitOrLoss)}
-                      </TableCell>
+                      {canViewProfit && (
+                        <TableCell className={`text-right font-semibold ${r.profitOrLoss >= 0 ? "text-primary" : "text-destructive"}`}>
+                          {formatCurrency(r.profitOrLoss)}
+                        </TableCell>
+                      )}
                       <TableCell className="text-right">
                         <span className="text-muted-foreground">({r.stockQty})</span>{" "}
                         {formatCurrency(r.stockAmount)}
