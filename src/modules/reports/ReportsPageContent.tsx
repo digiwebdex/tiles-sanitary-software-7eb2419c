@@ -467,12 +467,12 @@ function BrandStockReport({ dealerId }: { dealerId: string }) {
                   <TableHead className="text-right">Sold</TableHead>
                   <TableHead className="text-right">Purchased Amount</TableHead>
                   <TableHead className="text-right">Sold Amount</TableHead>
-                  <TableHead className="text-right">Profit and/or Loss</TableHead>
+                  {canViewProfit && <TableHead className="text-right">Profit and/or Loss</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(data ?? []).length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={canViewProfit ? 6 : 5} className="text-center text-muted-foreground">No data</TableCell></TableRow>
                 ) : (
                   <>
                     {(data ?? []).map((r) => (
