@@ -266,11 +266,12 @@ export const salesService = {
     });
 
     // Auto-create challan record linked to sale
-    const { count: challanCount } = await supabase
-      .from("challans")
-      .select("id", { count: "exact", head: true })
-      .eq("dealer_id", input.dealer_id);
-    const challanNo = `CH-${String((challanCount ?? 0) + 1).padStart(5, "0")}`;
+    const { data: challanNoData, error: challanNoErr } = await supabase.rpc("generate_next_challan_no", {
+      _dealer_id: input.dealer_id,
+    });
+    const challanNo = challanNoErr
+      ? `CH-${String(Date.now()).slice(-5)}`
+      : (challanNoData as string);
 
     await supabase
       .from("challans")
