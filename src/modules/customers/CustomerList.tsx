@@ -62,6 +62,7 @@ const CustomerList = () => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [showImport, setShowImport] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["customers", dealerId, search, typeFilter, page],
@@ -163,9 +164,14 @@ const CustomerList = () => {
         <h1 className="text-2xl font-bold text-foreground">Customers</h1>
         <div className="flex gap-2">
           {permissions.canExportReports && (
-            <Button variant="outline" onClick={handleExport}>
-              <Download className="mr-2 h-4 w-4" /> Export
-            </Button>
+            <>
+              <Button variant="outline" onClick={handleExport}>
+                <Download className="mr-2 h-4 w-4" /> Export
+              </Button>
+              <Button variant="outline" onClick={() => setShowImport(true)}>
+                <Upload className="mr-2 h-4 w-4" /> Import
+              </Button>
+            </>
           )}
           <Button onClick={() => navigate("/customers/new")}>
             <Plus className="mr-2 h-4 w-4" /> Add Customer
@@ -359,3 +365,6 @@ const commonColumns = {
 };
 
 export default CustomerList;
+
+// Import dialog is rendered in the component - need to add before the final closing
+
