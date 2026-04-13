@@ -132,7 +132,11 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
         .filter((g) => g.items.length > 0);
 
   const filteredNavItems = filteredGroups.flatMap((g) => g.items);
+
+  const renderReport = () => {
+    switch (activeReport) {
       case "stock": return <StockReport dealerId={dealerId} />;
+
       case "brand-stock": return <BrandStockReport dealerId={dealerId} />;
       case "daily-sales": return <DailySalesCalendar dealerId={dealerId} />;
       case "monthly-summary": return <MonthlySummaryReport dealerId={dealerId} />;
