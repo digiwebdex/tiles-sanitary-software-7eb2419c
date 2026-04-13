@@ -27,6 +27,15 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { exportToExcel } from "@/lib/exportUtils";
+import { usePermissions } from "@/hooks/usePermissions";
+import {
+  SalesBySalesmanReport,
+  SupplierOutstandingReport,
+  PendingDeliveryReport,
+  DeliveryStatusReport,
+  StockMovementReport,
+} from "./AdditionalReports";
 import { cn } from "@/lib/utils";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
