@@ -68,6 +68,7 @@ const reportGroups = [
       { key: "sales", label: "Monthly Sales", icon: Calendar },
       { key: "monthly-summary", label: "Monthly Summary", icon: BookOpen },
       { key: "sales-report", label: "Sales Report", icon: Receipt },
+      { key: "sales-by-salesman", label: "Sales by Salesman", icon: Users },
       { key: "profit-analysis", label: "Profit Analysis", icon: TrendingUp },
     ],
   },
@@ -79,6 +80,7 @@ const reportGroups = [
       { key: "brand-stock", label: "Brands Report", icon: Tags },
       { key: "inventory", label: "Inventory Report", icon: Layers },
       { key: "low-stock", label: "Low Stock Report", icon: AlertTriangle },
+      { key: "stock-movement", label: "Stock Movement", icon: History },
       { key: "product-history", label: "Product History", icon: History },
     ],
   },
@@ -89,6 +91,15 @@ const reportGroups = [
       { key: "retailer", label: "Customers Report", icon: Users },
       { key: "payments", label: "Payments Report", icon: CreditCard },
       { key: "due-aging", label: "Due Aging", icon: Clock },
+      { key: "supplier-outstanding", label: "Supplier Outstanding", icon: ShoppingCart },
+    ],
+  },
+  {
+    label: "Deliveries",
+    icon: Package,
+    items: [
+      { key: "pending-delivery", label: "Pending Deliveries", icon: AlertTriangle },
+      { key: "delivery-status", label: "Delivery Status", icon: Package },
     ],
   },
   {
