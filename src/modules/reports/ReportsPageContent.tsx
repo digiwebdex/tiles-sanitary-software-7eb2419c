@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -26,6 +27,15 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { exportToExcel } from "@/lib/exportUtils";
+import { usePermissions } from "@/hooks/usePermissions";
+import {
+  SalesBySalesmanReport,
+  SupplierOutstandingReport,
+  PendingDeliveryReport,
+  DeliveryStatusReport,
+  StockMovementReport,
+} from "./AdditionalReports";
 import { cn } from "@/lib/utils";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
@@ -58,6 +68,7 @@ const reportGroups = [
       { key: "sales", label: "Monthly Sales", icon: Calendar },
       { key: "monthly-summary", label: "Monthly Summary", icon: BookOpen },
       { key: "sales-report", label: "Sales Report", icon: Receipt },
+      { key: "sales-by-salesman", label: "Sales by Salesman", icon: Users },
       { key: "profit-analysis", label: "Profit Analysis", icon: TrendingUp },
     ],
   },
@@ -69,6 +80,7 @@ const reportGroups = [
       { key: "brand-stock", label: "Brands Report", icon: Tags },
       { key: "inventory", label: "Inventory Report", icon: Layers },
       { key: "low-stock", label: "Low Stock Report", icon: AlertTriangle },
+      { key: "stock-movement", label: "Stock Movement", icon: History },
       { key: "product-history", label: "Product History", icon: History },
     ],
   },
@@ -79,6 +91,15 @@ const reportGroups = [
       { key: "retailer", label: "Customers Report", icon: Users },
       { key: "payments", label: "Payments Report", icon: CreditCard },
       { key: "due-aging", label: "Due Aging", icon: Clock },
+      { key: "supplier-outstanding", label: "Supplier Outstanding", icon: ShoppingCart },
+    ],
+  },
+  {
+    label: "Deliveries",
+    icon: Package,
+    items: [
+      { key: "pending-delivery", label: "Pending Deliveries", icon: AlertTriangle },
+      { key: "delivery-status", label: "Delivery Status", icon: Package },
     ],
   },
   {
@@ -107,6 +128,7 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "low-stock": return <LowStockReport dealerId={dealerId} />;
       case "sales": return <SalesReport dealerId={dealerId} />;
       case "sales-report": return <DetailedSalesReport dealerId={dealerId} />;
+      case "sales-by-salesman": return <SalesBySalesmanReport dealerId={dealerId} />;
       case "purchases": return <PurchasesReport dealerId={dealerId} />;
       case "payments": return <PaymentsReport dealerId={dealerId} />;
       case "retailer": return <RetailerSalesReport dealerId={dealerId} />;
@@ -114,6 +136,10 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "accounting": return <AccountingSummaryReport dealerId={dealerId} />;
       case "due-aging": return <DueAgingReport dealerId={dealerId} />;
       case "profit-analysis": return <ProfitAnalysisReport dealerId={dealerId} />;
+      case "supplier-outstanding": return <SupplierOutstandingReport dealerId={dealerId} />;
+      case "pending-delivery": return <PendingDeliveryReport dealerId={dealerId} />;
+      case "delivery-status": return <DeliveryStatusReport dealerId={dealerId} />;
+      case "stock-movement": return <StockMovementReport dealerId={dealerId} />;
       default: return <StockReport dealerId={dealerId} />;
     }
   };

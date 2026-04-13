@@ -322,6 +322,54 @@ export type Database = {
           },
         ]
       }
+      customer_followups: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          dealer_id: string
+          followup_date: string
+          id: string
+          note: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          dealer_id: string
+          followup_date?: string
+          id?: string
+          note: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          dealer_id?: string
+          followup_date?: string
+          id?: string
+          note?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_followups_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_followups_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "dealers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_ledger: {
         Row: {
           amount: number
