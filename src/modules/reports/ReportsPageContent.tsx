@@ -447,6 +447,7 @@ function StockReport({ dealerId }: { dealerId: string }) {
 
 // ─── Brand-wise Stock ─────────────────────────────────────
 function BrandStockReport({ dealerId }: { dealerId: string }) {
+  const { canViewProfit } = usePermissions();
   const { data, isLoading } = useQuery({
     queryKey: ["report-brand-stock", dealerId],
     queryFn: () => fetchBrandStockReport(dealerId),
