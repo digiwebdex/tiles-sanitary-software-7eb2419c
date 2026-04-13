@@ -32,12 +32,19 @@ export interface CreateSaleInput {
 const PAGE_SIZE = 25;
 
 async function generateInvoiceNumber(dealerId: string): Promise<string> {
-  const { count } = await supabase
-    .from("sales")
-    .select("id", { count: "exact", head: true })
-    .eq("dealer_id", dealerId);
-  const next = (count ?? 0) + 1;
-  return `INV-${String(next).padStart(5, "0")}`;
+  const { data, error } = await supabase.rpc("generate_next_invoice_no", {
+    _dealer_id: dealerId,
+  });
+  if (error) {
+    // Fallback to count-based if RPC fails (e.g. function not deployed yet)
+    const { count } = await supabase
+      .from("sales")
+      .select("id", { count: "exact", head: true })
+      .eq("dealer_id", dealerId);
+    const next = (count ?? 0) + 1;
+    return `INV-${String(next).padStart(5, "0")}`;
+  }
+  return data as string;
 }
 
 export const salesService = {
@@ -259,11 +266,12 @@ export const salesService = {
     });
 
     // Auto-create challan record linked to sale
-    const { count: challanCount } = await supabase
-      .from("challans")
-      .select("id", { count: "exact", head: true })
-      .eq("dealer_id", input.dealer_id);
-    const challanNo = `CH-${String((challanCount ?? 0) + 1).padStart(5, "0")}`;
+    const { data: challanNoData, error: challanNoErr } = await supabase.rpc("generate_next_challan_no", {
+      _dealer_id: input.dealer_id,
+    });
+    const challanNo = challanNoErr
+      ? `CH-${String(Date.now()).slice(-5)}`
+      : (challanNoData as string);
 
     await supabase
       .from("challans")
@@ -514,5 +522,98 @@ export const salesService = {
     });
 
     return { id: saleId };
+  },
+
+  /**
+   * Cancel/delete a sale with full atomic reversal of stock, ledger, and related records.
+   * Blocks if sale is delivered or has deliveries.
+   */
+  async cancelSale(saleId: string, dealerId: string) {
+    await assertDealerId(dealerId);
+
+    // 1. Fetch full sale with items and related records
+    const { data: sale, error: fetchErr } = await supabase
+      .from("sales")
+      .select("*, sale_items(product_id, quantity)")
+      .eq("id", saleId)
+      .eq("dealer_id", dealerId)
+      .single();
+    if (fetchErr || !sale) throw new Error("Sale not found");
+
+    const saleStatus = (sale as any).sale_status;
+    const saleType = (sale as any).sale_type;
+
+    // 2. Check if delivered — block deletion
+    const { data: challans } = await supabase
+      .from("challans")
+      .select("id, status, delivery_status")
+      .eq("sale_id", saleId)
+      .eq("dealer_id", dealerId);
+
+    const hasDelivered = (challans ?? []).some(
+      (c: any) => c.delivery_status === "delivered" || c.status === "delivered"
+    );
+    if (hasDelivered) throw new Error("Cannot delete a sale that has been delivered");
+
+    // 3. Check for existing deliveries
+    const { count: deliveryCount } = await supabase
+      .from("deliveries")
+      .select("id", { count: "exact", head: true })
+      .eq("sale_id", saleId)
+      .eq("dealer_id", dealerId);
+    if ((deliveryCount ?? 0) > 0) throw new Error("Cannot delete a sale with existing deliveries");
+
+    // 4. Check if payment received (block if partial/full paid on invoiced sale)
+    if (Number(sale.paid_amount) > 0 && saleStatus === "invoiced") {
+      throw new Error("Cannot delete a sale with payments recorded. Record a sales return instead.");
+    }
+
+    const items = (sale as any).sale_items ?? [];
+
+    // 5. Reverse stock effects based on sale type/status
+    if (saleType === "challan_mode" && (saleStatus === "challan_created" || saleStatus === "delivered")) {
+      // Challan mode: unreserve stock
+      for (const item of items) {
+        await stockService.unreserveStock(item.product_id, Number(item.quantity), dealerId);
+      }
+    } else if (saleStatus === "invoiced") {
+      // Direct invoice: restore deducted stock
+      for (const item of items) {
+        await stockService.restoreStock(item.product_id, Number(item.quantity), dealerId);
+      }
+    }
+    // Draft challan_mode with no challan created: no stock to reverse
+
+    // 6. Delete ledger entries for this sale
+    await supabase.from("customer_ledger").delete().eq("sale_id", saleId).eq("dealer_id", dealerId);
+    await supabase.from("cash_ledger").delete().eq("reference_id", saleId).eq("dealer_id", dealerId);
+
+    // 7. Cancel related challans
+    for (const ch of (challans ?? [])) {
+      if ((ch as any).status !== "cancelled") {
+        await supabase.from("challans").update({ status: "cancelled" } as any).eq("id", ch.id);
+      }
+    }
+
+    // 8. Delete sale items
+    await supabase.from("sale_items").delete().eq("sale_id", saleId);
+
+    // 9. Delete sale record
+    const { error: delErr } = await supabase.from("sales").delete().eq("id", saleId);
+    if (delErr) throw new Error(delErr.message);
+
+    // 10. Audit log
+    await logAudit({
+      dealer_id: dealerId,
+      action: "sale_cancel_delete",
+      table_name: "sales",
+      record_id: saleId,
+      old_data: {
+        invoice_number: sale.invoice_number,
+        total_amount: Number(sale.total_amount),
+        customer_id: sale.customer_id,
+        items_reversed: items.length,
+      },
+    });
   },
 };

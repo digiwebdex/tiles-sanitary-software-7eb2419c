@@ -742,6 +742,32 @@ export type Database = {
           },
         ]
       }
+      invoice_sequences: {
+        Row: {
+          dealer_id: string
+          next_challan_no: number
+          next_invoice_no: number
+        }
+        Insert: {
+          dealer_id: string
+          next_challan_no?: number
+          next_invoice_no?: number
+        }
+        Update: {
+          dealer_id?: string
+          next_challan_no?: number
+          next_invoice_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_sequences_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: true
+            referencedRelation: "dealers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_settings: {
         Row: {
           created_at: string
@@ -1801,6 +1827,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_next_challan_no: {
+        Args: { _dealer_id: string }
+        Returns: string
+      }
+      generate_next_invoice_no: {
+        Args: { _dealer_id: string }
+        Returns: string
+      }
       get_user_dealer_id: { Args: { _user_id: string }; Returns: string }
       has_active_subscription: { Args: never; Returns: boolean }
       has_role: {

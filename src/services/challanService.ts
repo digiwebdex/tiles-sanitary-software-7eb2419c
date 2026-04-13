@@ -19,12 +19,18 @@ export interface CreateChallanInput {
 }
 
 async function generateChallanNumber(dealerId: string): Promise<string> {
-  const { count } = await supabase
-    .from("challans")
-    .select("id", { count: "exact", head: true })
-    .eq("dealer_id", dealerId);
-  const next = (count ?? 0) + 1;
-  return `CH-${String(next).padStart(5, "0")}`;
+  const { data, error } = await supabase.rpc("generate_next_challan_no", {
+    _dealer_id: dealerId,
+  });
+  if (error) {
+    const { count } = await supabase
+      .from("challans")
+      .select("id", { count: "exact", head: true })
+      .eq("dealer_id", dealerId);
+    const next = (count ?? 0) + 1;
+    return `CH-${String(next).padStart(5, "0")}`;
+  }
+  return data as string;
 }
 
 export const challanService = {
