@@ -59,6 +59,11 @@ const months = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+// Reports that require admin-only access
+const ADMIN_ONLY_REPORTS = new Set([
+  "profit-analysis", "accounting", "supplier-outstanding", "purchases",
+]);
+
 const reportGroups = [
   {
     label: "Sales & Revenue",
