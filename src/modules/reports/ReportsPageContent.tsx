@@ -161,7 +161,7 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
   };
 
   // Find which group the active report belongs to
-  const activeGroup = reportGroups.find((g) => g.items.some((i) => i.key === activeReport));
+  const activeGroup = filteredGroups.find((g) => g.items.some((i) => i.key === activeReport));
 
   return (
     <div className="min-h-[calc(100vh-8rem)] flex flex-col md:flex-row">
@@ -172,7 +172,7 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
           <h2 className="text-sm font-bold text-foreground">Reports</h2>
         </div>
         <nav className="p-2 space-y-1">
-          {reportGroups.map((group) => {
+          {filteredGroups.map((group) => {
             const isGroupActive = group.items.some((i) => i.key === activeReport);
             return (
               <Collapsible key={group.label} defaultOpen={isGroupActive}>
@@ -213,7 +213,7 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
           <h2 className="text-sm font-bold text-foreground">Reports</h2>
         </div>
         <div className="flex overflow-x-auto gap-0 -mb-px">
-          {reportNavItems.map((item) => (
+          {filteredNavItems.map((item) => (
             <button
               key={item.key}
               onClick={() => setActiveReport(item.key)}
