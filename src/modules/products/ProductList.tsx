@@ -60,6 +60,7 @@ const ProductList = ({ dealerId }: ProductListProps) => {
   const [barcodeChangeProduct, setBarcodeChangeProduct] = useState<typeof products[0] | null>(null);
   const [reorderProduct, setReorderProduct] = useState<typeof products[0] | null>(null);
   const [stockSummaryProduct, setStockSummaryProduct] = useState<typeof products[0] | null>(null);
+  const [showImport, setShowImport] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -568,6 +569,18 @@ const ProductList = ({ dealerId }: ProductListProps) => {
         onOpenChange={(open) => { if (!open) setStockSummaryProduct(null); }}
         product={stockSummaryProduct}
         dealerId={dealerId}
+      />
+      <BulkImportDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        title="Products"
+        columns={productColumns}
+        sampleData={productSampleData}
+        onImport={async (rows, mode) => {
+          const result = await importProducts(rows, mode, dealerId);
+          queryClient.invalidateQueries({ queryKey: ["products"] });
+          return result;
+        }}
       />
     </div>
   );
