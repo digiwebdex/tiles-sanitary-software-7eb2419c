@@ -1,4 +1,6 @@
 import { useState } from "react";
+import BulkImportDialog from "@/modules/import/BulkImportDialog";
+import { productColumns, productSampleData, importProducts } from "@/modules/import/useImportConfigs";
 import { formatCurrency } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -13,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import {
-  Plus, Search, AlertTriangle, Printer, Download,
+  Plus, Search, AlertTriangle, Printer, Download, Upload,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import BarcodePrintDialog from "./BarcodePrintDialog";
@@ -58,6 +60,7 @@ const ProductList = ({ dealerId }: ProductListProps) => {
   const [barcodeChangeProduct, setBarcodeChangeProduct] = useState<typeof products[0] | null>(null);
   const [reorderProduct, setReorderProduct] = useState<typeof products[0] | null>(null);
   const [stockSummaryProduct, setStockSummaryProduct] = useState<typeof products[0] | null>(null);
+  const [showImport, setShowImport] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -271,9 +274,14 @@ const ProductList = ({ dealerId }: ProductListProps) => {
         <h1 className="text-2xl font-bold text-foreground">Products</h1>
         <div className="flex gap-2">
           {permissions.canExportReports && (
-            <Button variant="outline" onClick={handleExport}>
-              <Download className="mr-2 h-4 w-4" /> Export
-            </Button>
+            <>
+              <Button variant="outline" onClick={handleExport}>
+                <Download className="mr-2 h-4 w-4" /> Export
+              </Button>
+              <Button variant="outline" onClick={() => setShowImport(true)}>
+                <Upload className="mr-2 h-4 w-4" /> Import
+              </Button>
+            </>
           )}
           {selected.size > 0 && (
             <Button variant="outline" onClick={openBulkBarcode}>
@@ -561,6 +569,18 @@ const ProductList = ({ dealerId }: ProductListProps) => {
         onOpenChange={(open) => { if (!open) setStockSummaryProduct(null); }}
         product={stockSummaryProduct}
         dealerId={dealerId}
+      />
+      <BulkImportDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        title="Products"
+        columns={productColumns}
+        sampleData={productSampleData}
+        onImport={async (rows, mode) => {
+          const result = await importProducts(rows, mode, dealerId);
+          queryClient.invalidateQueries({ queryKey: ["products"] });
+          return result;
+        }}
       />
     </div>
   );

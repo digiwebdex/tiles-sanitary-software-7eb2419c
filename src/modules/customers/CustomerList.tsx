@@ -1,4 +1,6 @@
 import { useState } from "react";
+import BulkImportDialog from "@/modules/import/BulkImportDialog";
+import { customerColumns, customerSampleData, importCustomers } from "@/modules/import/useImportConfigs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { customerService } from "@/services/customerService";
@@ -17,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Pagination from "@/components/Pagination";
 import { toast } from "sonner";
-import { Plus, Search, Eye, Pencil, Copy, ToggleLeft, ToggleRight, BookOpen, ShoppingCart, CreditCard, Download } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Copy, ToggleLeft, ToggleRight, BookOpen, ShoppingCart, CreditCard, Download, Upload } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { CreditStatusBadge } from "@/components/CreditStatusBadge";
@@ -60,6 +62,7 @@ const CustomerList = () => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [showImport, setShowImport] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["customers", dealerId, search, typeFilter, page],
@@ -161,9 +164,14 @@ const CustomerList = () => {
         <h1 className="text-2xl font-bold text-foreground">Customers</h1>
         <div className="flex gap-2">
           {permissions.canExportReports && (
-            <Button variant="outline" onClick={handleExport}>
-              <Download className="mr-2 h-4 w-4" /> Export
-            </Button>
+            <>
+              <Button variant="outline" onClick={handleExport}>
+                <Download className="mr-2 h-4 w-4" /> Export
+              </Button>
+              <Button variant="outline" onClick={() => setShowImport(true)}>
+                <Upload className="mr-2 h-4 w-4" /> Import
+              </Button>
+            </>
           )}
           <Button onClick={() => navigate("/customers/new")}>
             <Plus className="mr-2 h-4 w-4" /> Add Customer
@@ -340,6 +348,18 @@ const CustomerList = () => {
           )}
         </>
       )}
+      <BulkImportDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        title="Customers"
+        columns={customerColumns}
+        sampleData={customerSampleData}
+        onImport={async (rows, mode) => {
+          const result = await importCustomers(rows, mode, dealerId);
+          queryClient.invalidateQueries({ queryKey: ["customers"] });
+          return result;
+        }}
+      />
     </div>
   );
 };
@@ -357,3 +377,6 @@ const commonColumns = {
 };
 
 export default CustomerList;
+
+// Import dialog is rendered in the component - need to add before the final closing
+

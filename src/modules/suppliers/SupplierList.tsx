@@ -1,4 +1,6 @@
 import { useState } from "react";
+import BulkImportDialog from "@/modules/import/BulkImportDialog";
+import { supplierColumns, supplierSampleData, importSuppliers } from "@/modules/import/useImportConfigs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supplierService } from "@/services/supplierService";
@@ -14,7 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Pagination from "@/components/Pagination";
 import { toast } from "sonner";
-import { Plus, Search, Eye, Pencil, Copy, ToggleLeft, ToggleRight, ShoppingCart, BookOpen, Download } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Copy, ToggleLeft, ToggleRight, ShoppingCart, BookOpen, Download, Upload } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -29,6 +31,7 @@ const SupplierList = () => {
   const permissions = usePermissions();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [showImport, setShowImport] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["suppliers", dealerId, search, page],
@@ -92,9 +95,14 @@ const SupplierList = () => {
         <h1 className="text-2xl font-bold text-foreground">Suppliers</h1>
         <div className="flex gap-2">
           {permissions.canExportReports && (
-            <Button variant="outline" onClick={handleExport}>
-              <Download className="mr-2 h-4 w-4" /> Export
-            </Button>
+            <>
+              <Button variant="outline" onClick={handleExport}>
+                <Download className="mr-2 h-4 w-4" /> Export
+              </Button>
+              <Button variant="outline" onClick={() => setShowImport(true)}>
+                <Upload className="mr-2 h-4 w-4" /> Import
+              </Button>
+            </>
           )}
           <Button onClick={() => navigate("/suppliers/new")}>
             <Plus className="mr-2 h-4 w-4" /> Add Supplier
@@ -220,6 +228,18 @@ const SupplierList = () => {
           )}
         </>
       )}
+      <BulkImportDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        title="Suppliers"
+        columns={supplierColumns}
+        sampleData={supplierSampleData}
+        onImport={async (rows, mode) => {
+          const result = await importSuppliers(rows, mode, dealerId);
+          queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+          return result;
+        }}
+      />
     </div>
   );
 };
