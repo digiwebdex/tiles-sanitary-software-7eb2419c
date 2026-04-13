@@ -117,6 +117,7 @@ const reportNavItems = reportGroups.flatMap((g) => g.items);
 
 const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
   const [activeReport, setActiveReport] = useState("stock");
+  const permissions = usePermissions();
 
   const renderReport = () => {
     switch (activeReport) {
