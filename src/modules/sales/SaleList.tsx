@@ -91,12 +91,14 @@ const SaleList = ({ dealerId }: SaleListProps) => {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("sales").delete().eq("id", id);
-      if (error) throw new Error(error.message);
+      await salesService.cancelSale(id, dealerId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
-      toast.success("Sale deleted");
+      queryClient.invalidateQueries({ queryKey: ["stock"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-ledger"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-ledger"] });
+      toast.success("Sale cancelled and reversed successfully");
       setDeleteSale(null);
     },
     onError: (e) => toast.error(e.message),
