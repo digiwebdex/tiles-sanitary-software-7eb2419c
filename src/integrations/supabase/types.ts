@@ -64,6 +64,51 @@ export type Database = {
           },
         ]
       }
+      backup_logs: {
+        Row: {
+          app_name: string
+          backup_type: string
+          completed_at: string | null
+          created_at: string | null
+          database_name: string
+          error_message: string | null
+          file_name: string | null
+          file_size: number | null
+          id: string
+          started_at: string | null
+          status: string
+          storage_location: string | null
+        }
+        Insert: {
+          app_name?: string
+          backup_type: string
+          completed_at?: string | null
+          created_at?: string | null
+          database_name: string
+          error_message?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          id?: string
+          started_at?: string | null
+          status?: string
+          storage_location?: string | null
+        }
+        Update: {
+          app_name?: string
+          backup_type?: string
+          completed_at?: string | null
+          created_at?: string | null
+          database_name?: string
+          error_message?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          id?: string
+          started_at?: string | null
+          status?: string
+          storage_location?: string | null
+        }
+        Relationships: []
+      }
       campaign_gifts: {
         Row: {
           campaign_name: string
@@ -1261,6 +1306,68 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      restore_logs: {
+        Row: {
+          app_name: string
+          backup_file_name: string
+          backup_log_id: string | null
+          backup_type: string
+          completed_at: string | null
+          created_at: string | null
+          database_name: string
+          error_message: string | null
+          id: string
+          initiated_by: string | null
+          initiated_by_name: string | null
+          logs: string | null
+          pre_restore_backup_taken: boolean | null
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          app_name?: string
+          backup_file_name: string
+          backup_log_id?: string | null
+          backup_type: string
+          completed_at?: string | null
+          created_at?: string | null
+          database_name: string
+          error_message?: string | null
+          id?: string
+          initiated_by?: string | null
+          initiated_by_name?: string | null
+          logs?: string | null
+          pre_restore_backup_taken?: boolean | null
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          app_name?: string
+          backup_file_name?: string
+          backup_log_id?: string | null
+          backup_type?: string
+          completed_at?: string | null
+          created_at?: string | null
+          database_name?: string
+          error_message?: string | null
+          id?: string
+          initiated_by?: string | null
+          initiated_by_name?: string | null
+          logs?: string | null
+          pre_restore_backup_taken?: boolean | null
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "restore_logs_backup_log_id_fkey"
+            columns: ["backup_log_id"]
+            isOneToOne: false
+            referencedRelation: "backup_logs"
             referencedColumns: ["id"]
           },
         ]
