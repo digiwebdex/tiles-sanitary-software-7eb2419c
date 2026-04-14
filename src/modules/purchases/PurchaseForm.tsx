@@ -1,3 +1,4 @@
+import React from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { purchaseSchema, type PurchaseFormValues } from "@/modules/purchases/purchaseSchema";
