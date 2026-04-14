@@ -5,6 +5,7 @@ import { logAudit } from "@/services/auditService";
 import { validateInput, createPurchaseServiceSchema } from "@/lib/validators";
 import { assertDealerId } from "@/lib/tenancy";
 import { rateLimits } from "@/lib/rateLimit";
+import { backorderAllocationService } from "@/services/backorderAllocationService";
 
 export interface PurchaseItemInput {
   product_id: string;
@@ -134,8 +135,10 @@ export const purchaseService = {
       total: item.landed_cost,
     }));
 
-    const { error: iErr } = await supabase.from("purchase_items").insert(itemRows);
+    const { data: insertedItems, error: iErr } = await supabase.from("purchase_items").insert(itemRows).select("id, product_id");
     if (iErr) throw new Error(iErr.message);
+
+    const insertedItemMap = new Map((insertedItems ?? []).map(i => [i.product_id, i.id]));
 
     for (const item of itemsWithCalc) {
       const product = productMap.get(item.product_id);
