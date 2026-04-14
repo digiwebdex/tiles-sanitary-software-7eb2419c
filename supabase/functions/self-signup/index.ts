@@ -118,11 +118,11 @@ Deno.serve(async (req) => {
       .from("invoice_sequences")
       .insert({ dealer_id: dealer.id });
 
-    // ── 6. Get Basic plan and create trial subscription (30 days) ──
+    // ── 6. Get Starter plan and create trial subscription (3 days) ──
     const { data: plan } = await serviceClient
       .from("subscription_plans")
       .select("id")
-      .eq("name", "Basic")
+      .eq("name", "Starter")
       .eq("is_active", true)
       .single();
 
@@ -139,6 +139,17 @@ Deno.serve(async (req) => {
         end_date: endDate,
       });
     }
+
+    // ── 6b. Create default notification settings ──
+    await serviceClient.from("notification_settings").insert({
+      dealer_id: dealer.id,
+      enable_sale_sms: true,
+      enable_sale_email: true,
+      enable_daily_summary_sms: true,
+      enable_daily_summary_email: true,
+      owner_email: emailLower,
+      owner_phone: phone.trim(),
+    });
 
     // ── 7. Log as contact submission for SA tracking ──
     await serviceClient.from("contact_submissions").insert({
