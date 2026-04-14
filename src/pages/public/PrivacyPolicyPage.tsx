@@ -257,7 +257,7 @@ const PrivacyPolicyPage = () => {
                   support@yourdomain.com
                 </Button>
               </a>
-              <a href="tel:+8801234567890">
+              <a href="tel:+8801674533303">
                 <Button
                   size="lg"
                   variant="outline"
