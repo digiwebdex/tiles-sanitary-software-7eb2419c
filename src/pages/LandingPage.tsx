@@ -414,14 +414,21 @@ const PRICING_PLANS = [
     highlighted: false,
     monthlyPrice: 999,
     yearlyPrice: 10000,
-    features: ["Up to 2 users", "Inventory management", "Basic reports", "Customer ledger", "Email notifications"],
+    features: ["1 user", "Inventory management", "Basic reports", "Customer ledger", "Email notifications"],
   },
   {
     name: "Pro",
     highlighted: true,
     monthlyPrice: 1500,
     yearlyPrice: 20000,
-    features: ["Up to 5 users", "All Starter features", "Advanced analytics", "Multi-branch ready", "Priority support", "Email notifications", "SMS notifications"],
+    features: ["Up to 2 users", "All Starter features", "Advanced analytics", "Priority support", "Email notifications", "SMS notifications"],
+  },
+  {
+    name: "Business",
+    highlighted: false,
+    monthlyPrice: 2500,
+    yearlyPrice: 30000,
+    features: ["Up to 5 users", "All Pro features", "Multi-branch ready", "Dedicated support", "Custom reports", "Full API access"],
   },
 ];
 
