@@ -13,7 +13,7 @@ export async function seed(knex: Knex): Promise<void> {
 
   // 1. Create super admin user
   const [superAdminUser] = await knex('users').insert({
-    email: 'admin@tileserp.com',
+    email: 'bditengineer@gmail.com',
     password_hash: passwordHash,
     name: 'Super Admin',
   }).returning('*');
