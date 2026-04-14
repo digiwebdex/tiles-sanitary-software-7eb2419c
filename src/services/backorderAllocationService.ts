@@ -123,6 +123,7 @@ export const backorderAllocationService = {
         dealer_id: dealerId,
         action: "backorder_allocation",
         table_name: "backorder_allocations",
+        record_id: purchaseItemId,
         new_data: {
           product_id: productId,
           purchase_item_id: purchaseItemId,
