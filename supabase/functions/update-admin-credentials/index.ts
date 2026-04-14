@@ -8,73 +8,67 @@ Deno.serve(async (req) => {
   const newEmail = "bditengineer@gmail.com";
   const newPassword = "KeyaIq11151000@#";
 
-  // Find the super admin user by checking user_roles
-  const { data: roleData } = await supabase
-    .from("user_roles")
-    .select("user_id")
-    .eq("role", "super_admin");
+  // List all users to find the one with this email
+  const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
+  
+  if (listError) {
+    return new Response(JSON.stringify({ error: "List users failed: " + listError.message }), { status: 500 });
+  }
 
-  if (!roleData || roleData.length === 0) {
-    // No super admin exists - create one
-    const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
-      email: newEmail,
+  const existingUser = users.find(u => u.email === newEmail);
+
+  if (existingUser) {
+    // User with this email already exists - update password and ensure super_admin role
+    const { error: updateError } = await supabase.auth.admin.updateUserById(existingUser.id, {
       password: newPassword,
       email_confirm: true,
     });
 
-    if (createError) {
-      return new Response(JSON.stringify({ error: "Create user failed: " + createError.message }), { status: 500 });
+    if (updateError) {
+      return new Response(JSON.stringify({ error: "Update password failed: " + updateError.message }), { status: 500 });
     }
 
-    // Create profile
+    // Ensure profile exists
     await supabase.from("profiles").upsert({
-      id: newUser.user.id,
+      id: existingUser.id,
       name: "Super Admin",
       email: newEmail,
     });
 
-    // Assign super_admin role
-    await supabase.from("user_roles").insert({
-      user_id: newUser.user.id,
-      role: "super_admin",
-    });
+    // Ensure super_admin role
+    const { data: existingRole } = await supabase
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", existingUser.id)
+      .eq("role", "super_admin")
+      .maybeSingle();
 
-    return new Response(JSON.stringify({ success: true, message: "Super admin created", userId: newUser.user.id }));
-  }
-
-  const userId = roleData[0].user_id;
-
-  // Try updating existing user
-  const { data: updatedUser, error: authError } = await supabase.auth.admin.updateUserById(userId, {
-    email: newEmail,
-    password: newPassword,
-    email_confirm: true,
-  });
-
-  if (authError) {
-    // If user doesn't exist in auth, create fresh
-    const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
-      email: newEmail,
-      password: newPassword,
-      email_confirm: true,
-    });
-
-    if (createError) {
-      return new Response(JSON.stringify({ error: "Failed: " + createError.message }), { status: 500 });
+    if (!existingRole) {
+      await supabase.from("user_roles").insert({
+        user_id: existingUser.id,
+        role: "super_admin",
+      });
     }
 
-    // Update profile to point to new auth user
-    await supabase.from("profiles").update({ email: newEmail }).eq("id", userId);
-    
-    // Update user_roles
-    await supabase.from("user_roles").update({ user_id: newUser.user.id }).eq("user_id", userId);
-    await supabase.from("profiles").update({ id: newUser.user.id }).eq("id", userId);
+    // Remove old super_admin roles for other users
+    const { data: otherRoles } = await supabase
+      .from("user_roles")
+      .select("id, user_id")
+      .eq("role", "super_admin")
+      .neq("user_id", existingUser.id);
 
-    return new Response(JSON.stringify({ success: true, message: "Super admin recreated", userId: newUser.user.id }));
+    if (otherRoles && otherRoles.length > 0) {
+      for (const r of otherRoles) {
+        await supabase.from("user_roles").delete().eq("id", r.id);
+      }
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: "Super admin updated - existing user with this email found and configured",
+      userId: existingUser.id 
+    }));
   }
 
-  // Update profiles table
-  await supabase.from("profiles").update({ email: newEmail }).eq("id", userId);
-
-  return new Response(JSON.stringify({ success: true, message: "Super admin credentials updated", userId }));
+  return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
 });
