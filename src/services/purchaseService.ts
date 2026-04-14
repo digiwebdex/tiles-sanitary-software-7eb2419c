@@ -6,6 +6,7 @@ import { validateInput, createPurchaseServiceSchema } from "@/lib/validators";
 import { assertDealerId } from "@/lib/tenancy";
 import { rateLimits } from "@/lib/rateLimit";
 import { backorderAllocationService } from "@/services/backorderAllocationService";
+import { batchService } from "@/services/batchService";
 
 export interface PurchaseItemInput {
   product_id: string;
@@ -15,6 +16,10 @@ export interface PurchaseItemInput {
   transport_cost: number;
   labor_cost: number;
   other_cost: number;
+  batch_no?: string;
+  lot_no?: string;
+  shade_code?: string;
+  caliber?: string;
 }
 
 export interface CreatePurchaseInput {
