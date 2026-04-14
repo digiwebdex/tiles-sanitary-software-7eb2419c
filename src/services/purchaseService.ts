@@ -6,6 +6,7 @@ import { validateInput, createPurchaseServiceSchema } from "@/lib/validators";
 import { assertDealerId } from "@/lib/tenancy";
 import { rateLimits } from "@/lib/rateLimit";
 import { backorderAllocationService } from "@/services/backorderAllocationService";
+import { batchService } from "@/services/batchService";
 
 export interface PurchaseItemInput {
   product_id: string;
@@ -15,6 +16,10 @@ export interface PurchaseItemInput {
   transport_cost: number;
   labor_cost: number;
   other_cost: number;
+  batch_no?: string;
+  lot_no?: string;
+  shade_code?: string;
+  caliber?: string;
 }
 
 export interface CreatePurchaseInput {
@@ -140,15 +145,42 @@ export const purchaseService = {
 
     const insertedItemMap = new Map((insertedItems ?? []).map(i => [i.product_id, i.id]));
 
-    for (const item of itemsWithCalc) {
+    for (let idx = 0; idx < itemsWithCalc.length; idx++) {
+      const item = itemsWithCalc[idx];
+      const originalItem = input.items[idx];
       const product = productMap.get(item.product_id);
-      const unitType = product?.unit_type ?? "piece";
+      const unitType = (product?.unit_type ?? "piece") as "box_sft" | "piece";
       const perBoxSft = product?.per_box_sft ?? null;
 
+      // Create or top-up batch
+      const batchNo = originalItem.batch_no?.trim() || `AUTO-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+      const { batch_id } = await batchService.findOrCreateBatch(
+        {
+          dealer_id: input.dealer_id,
+          product_id: item.product_id,
+          batch_no: batchNo,
+          lot_no: originalItem.lot_no,
+          shade_code: originalItem.shade_code,
+          caliber: originalItem.caliber,
+        },
+        item.quantity,
+        unitType,
+        perBoxSft
+      );
+
+      // Link purchase_item to batch
+      const purchaseItemId = insertedItemMap.get(item.product_id);
+      if (purchaseItemId) {
+        await supabase
+          .from("purchase_items")
+          .update({ batch_id } as any)
+          .eq("id", purchaseItemId);
+      }
+
+      // Update aggregate stock
       await stockService.addStock(item.product_id, item.quantity, input.dealer_id);
 
-      // For box_sft: average cost is per SFT (landed_cost / total_sft)
-      // For piece: average cost is per piece (landed_cost / quantity)
+      // Update average cost
       if (unitType === "box_sft" && perBoxSft && item.total_sft) {
         const costPerSft = item.total_sft > 0 ? item.landed_cost / item.total_sft : 0;
         await stockService.updateAverageCost(item.product_id, input.dealer_id, item.total_sft, costPerSft);
@@ -158,7 +190,6 @@ export const purchaseService = {
       }
 
       // Auto-allocate to pending backorders (FIFO)
-      const purchaseItemId = insertedItemMap.get(item.product_id);
       if (purchaseItemId) {
         await backorderAllocationService.allocateNewStock(
           item.product_id,

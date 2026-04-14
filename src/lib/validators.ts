@@ -52,6 +52,10 @@ export const createPurchaseServiceSchema = z.object({
     transport_cost: z.number().min(0, "Transport cost cannot be negative"),
     labor_cost: z.number().min(0, "Labor cost cannot be negative"),
     other_cost: z.number().min(0, "Other cost cannot be negative"),
+    batch_no: z.string().max(50).optional().or(z.literal("")),
+    lot_no: z.string().max(50).optional().or(z.literal("")),
+    shade_code: z.string().max(30).optional().or(z.literal("")),
+    caliber: z.string().max(30).optional().or(z.literal("")),
   })).min(1, "At least one item required"),
 });
 

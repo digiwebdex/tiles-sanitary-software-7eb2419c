@@ -8,6 +8,10 @@ export const purchaseItemSchema = z.object({
   transport_cost: z.coerce.number().min(0).default(0),
   labor_cost: z.coerce.number().min(0).default(0),
   other_cost: z.coerce.number().min(0).default(0),
+  batch_no: z.string().trim().max(50).optional().or(z.literal("")),
+  lot_no: z.string().trim().max(50).optional().or(z.literal("")),
+  shade_code: z.string().trim().max(30).optional().or(z.literal("")),
+  caliber: z.string().trim().max(30).optional().or(z.literal("")),
 });
 
 export const purchaseSchema = z.object({

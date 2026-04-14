@@ -1,3 +1,4 @@
+import React from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { purchaseSchema, type PurchaseFormValues } from "@/modules/purchases/purchaseSchema";
@@ -86,7 +87,7 @@ const PurchaseForm = ({ dealerId, showOfferPrice, onSubmit, isLoading }: Purchas
     queryFn: async () => {
       const { data } = await supabase
         .from("products")
-        .select("id, name, sku, unit_type, per_box_sft")
+        .select("id, name, sku, unit_type, per_box_sft, category")
         .eq("dealer_id", dealerId)
         .eq("active", true);
       return data ?? [];
@@ -196,11 +197,15 @@ const PurchaseForm = ({ dealerId, showOfferPrice, onSubmit, isLoading }: Purchas
     append({
       product_id: productId,
       quantity: 0,
-      purchase_rate: 0, // Do NOT auto-fill
+      purchase_rate: 0,
       offer_price: 0,
       transport_cost: 0,
       labor_cost: 0,
       other_cost: 0,
+      batch_no: "",
+      lot_no: "",
+      shade_code: "",
+      caliber: "",
     });
     setProductSearch("");
   };
@@ -362,7 +367,8 @@ const PurchaseForm = ({ dealerId, showOfferPrice, onSubmit, isLoading }: Purchas
                       const rateChanged = lastInfo && lastInfo.purchase_rate > 0 && currentRate > 0 && currentRate !== lastInfo.purchase_rate;
 
                       return (
-                        <TableRow key={field.id}>
+                        <React.Fragment key={field.id}>
+                        <TableRow>
                           <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                           <TableCell>
                             <div className="text-sm font-medium">{product?.name ?? "—"}</div>
@@ -496,9 +502,66 @@ const PurchaseForm = ({ dealerId, showOfferPrice, onSubmit, isLoading }: Purchas
                             </Button>
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
+                        {/* Batch fields row */}
+                        {product?.category === "tiles" && (
+                          <TableRow className="bg-muted/20 border-b">
+                            <TableCell></TableCell>
+                            <TableCell colSpan={showOfferPrice ? 9 : 8}>
+                              <div className="flex flex-wrap gap-2 py-1">
+                                <FormField
+                                  control={form.control}
+                                  name={`items.${idx}.batch_no`}
+                                  render={({ field: f }) => (
+                                    <FormItem className="space-y-0">
+                                      <FormControl>
+                                        <Input placeholder="Batch No" className="h-7 text-xs w-28" {...f} />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name={`items.${idx}.shade_code`}
+                                  render={({ field: f }) => (
+                                    <FormItem className="space-y-0">
+                                      <FormControl>
+                                        <Input placeholder="Shade" className="h-7 text-xs w-20" {...f} />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name={`items.${idx}.caliber`}
+                                  render={({ field: f }) => (
+                                    <FormItem className="space-y-0">
+                                      <FormControl>
+                                        <Input placeholder="Caliber" className="h-7 text-xs w-20" {...f} />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name={`items.${idx}.lot_no`}
+                                  render={({ field: f }) => (
+                                    <FormItem className="space-y-0">
+                                      <FormControl>
+                                        <Input placeholder="Lot No" className="h-7 text-xs w-24" {...f} />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <span className="text-[10px] text-muted-foreground self-center">Batch/Shade tracking</span>
+                              </div>
+                            </TableCell>
+                            <TableCell></TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </TableBody>
                 </Table>
               </div>
             </CardContent>
