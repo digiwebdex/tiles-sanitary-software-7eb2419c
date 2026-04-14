@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   CheckCircle2, XCircle, ArrowRight, Zap, Layers, Phone, Mail, MapPin,
   Users, Package, BarChart2, Bell, MessageCircle, ShieldCheck,
-  TrendingUp, Sparkles, GitBranch, HeadphonesIcon,
+  TrendingUp, Sparkles, GitBranch, HeadphonesIcon, Building2,
 } from "lucide-react";
 
 /* ─── NAV ─── */
@@ -304,6 +304,55 @@ const PricingPage = () => {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Payment Methods */}
+      <section className="py-16 px-4 bg-muted/30">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">পেমেন্ট মাধ্যম / Payment Methods</h2>
+            <p className="text-muted-foreground">সাবস্ক্রিপশন পেমেন্ট করতে নিচের যেকোনো মাধ্যম ব্যবহার করুন</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="rounded-xl border border-border bg-card p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Phone className="h-5 w-5 text-primary" />
+                <h3 className="font-bold text-foreground">মোবাইল ব্যাংকিং</h3>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between bg-muted/50 rounded-lg px-4 py-3">
+                  <div>
+                    <p className="font-semibold text-foreground">bKash / Nagad (Personal)</p>
+                    <p className="text-muted-foreground text-xs">Send Money</p>
+                  </div>
+                  <span className="font-mono font-bold text-foreground text-base">01674533303</span>
+                </div>
+                <div className="flex items-center justify-between bg-muted/50 rounded-lg px-4 py-3">
+                  <div>
+                    <p className="font-semibold text-foreground">Rocket</p>
+                    <p className="text-muted-foreground text-xs">Send Money</p>
+                  </div>
+                  <span className="font-mono font-bold text-foreground text-base">016745333033</span>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Building2 className="h-5 w-5 text-primary" />
+                <h3 className="font-bold text-foreground">ব্যাংক ট্রান্সফার</h3>
+              </div>
+              <div className="bg-muted/50 rounded-lg px-4 py-3 space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Account Name</span><span className="font-semibold text-foreground">Md. Iqbal Hossain</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Account Type</span><span className="text-foreground">Savings Account</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">A/C No.</span><span className="font-mono font-bold text-foreground">2706101077904</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Routing No.</span><span className="font-mono text-foreground">175260162</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Bank</span><span className="font-semibold text-foreground">Pubali Bank Limited</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Branch</span><span className="text-foreground text-right text-xs">Asad Avenue, Mohammadpur, Dhaka-1207</span></div>
+              </div>
+            </div>
+          </div>
+          <p className="text-center text-xs text-muted-foreground mt-4">পেমেন্ট করার পর অবশ্যই Transaction ID সহ আমাদের জানান</p>
         </div>
       </section>
 
