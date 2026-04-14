@@ -184,7 +184,7 @@ export function SubscriptionStatusReport() {
 
       const [dealersRes, plansRes, paymentsRes] = await Promise.all([
         supabase.from("dealers").select("id, name").in("id", dealerIds),
-        supabase.from("plans").select("id, name").in("id", planIds),
+        supabase.from("subscription_plans").select("id, name").in("id", planIds),
         supabase.from("subscription_payments").select("subscription_id, payment_date, amount, payment_status").order("payment_date", { ascending: false }),
       ]);
 
