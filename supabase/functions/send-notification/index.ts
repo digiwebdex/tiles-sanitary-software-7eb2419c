@@ -11,7 +11,7 @@ interface NotificationRequest {
   notification_id: string;
   dealer_id: string;
   channel: "sms" | "email";
-  type: "sale_created" | "daily_summary" | "payment_reminder";
+  type: "sale_created" | "daily_summary" | "payment_reminder" | "new_signup";
   payload: Record<string, unknown>;
   recipient: string;
 }
