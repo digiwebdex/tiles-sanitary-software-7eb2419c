@@ -395,6 +395,24 @@ const DealerManagement = () => {
                             </Button>
                             <Button
                               size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                setChangePlanDealerId(d.id);
+                                setChangePlanDealerName(d.name);
+                                setChangePlanHasExisting(!!d.subscription);
+                                setChangePlanForm({
+                                  plan_id: d.subscription?.plan_id ?? "",
+                                  start_date: d.subscription?.start_date ?? todayStr,
+                                  end_date: d.subscription?.end_date ?? "",
+                                });
+                                setChangePlanOpen(true);
+                              }}
+                              title="Change Plan"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                            <Button
+                              size="sm"
                               variant={(d.status ?? "active") === "active" ? "destructive" : "default"}
                               className="h-7 text-xs"
                               onClick={() =>
