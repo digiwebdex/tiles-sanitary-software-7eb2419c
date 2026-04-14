@@ -20,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { recordSubscriptionPayment } from "@/services/subscriptionPaymentService";
 import { Plus, CalendarPlus, Play, Pause, RefreshCw, Banknote, AlertCircle, CheckCircle2 } from "lucide-react";
-import { differenceInDays, parseISO, format } from "date-fns";
+import { differenceInDays, parseISO, format, addMonths, addYears } from "date-fns";
 import { checkYearlyDiscountEligibility } from "@/services/subscriptionPaymentService";
 
 interface SubRow {
