@@ -59,13 +59,13 @@ export const salesReturnService = {
     }
 
     // Validate return qty does not exceed sold qty for this product
-    const { data: saleItem, error: siErr } = await supabase
+    const { data: saleItemForValidation, error: siErr } = await supabase
       .from("sale_items")
-      .select("quantity")
+      .select("id, quantity, backorder_qty, allocated_qty, fulfillment_status")
       .eq("sale_id", input.sale_id)
       .eq("product_id", input.product_id)
       .single();
-    if (siErr || !saleItem) throw new Error("Product not found in this sale");
+    if (siErr || !saleItemForValidation) throw new Error("Product not found in this sale");
 
     // Check already-returned qty for this product on this sale
     const { data: existingReturns, error: erErr } = await supabase
@@ -76,7 +76,7 @@ export const salesReturnService = {
     if (erErr) throw new Error(erErr.message);
 
     const alreadyReturned = (existingReturns ?? []).reduce((s, r) => s + Number(r.qty), 0);
-    if (alreadyReturned + input.qty > Number(saleItem.quantity)) {
+    if (alreadyReturned + input.qty > Number(saleItemForValidation.quantity)) {
       throw new Error("Return quantity exceeds sold quantity");
     }
 
@@ -105,25 +105,16 @@ export const salesReturnService = {
     }
 
     // Update sale_item fulfillment if this product had backorder tracking
-    const { data: saleItem } = await supabase
-      .from("sale_items")
-      .select("id, backorder_qty, allocated_qty, fulfillment_status")
-      .eq("sale_id", input.sale_id)
-      .eq("product_id", input.product_id)
-      .single();
-
-    if (saleItem && saleItem.fulfillment_status !== "fulfilled") {
-      // Release allocations proportionally if return reduces the effective order
-      await backorderAllocationService.releaseAllocations(saleItem.id, input.dealer_id);
-      // Reset backorder state since returned items reduce the need
-      const newBackorder = Math.max(0, Number(saleItem.backorder_qty) - input.qty);
-      const newAllocated = Math.min(Number(saleItem.allocated_qty), newBackorder);
+    if (saleItemForValidation.fulfillment_status !== "fulfilled") {
+      await backorderAllocationService.releaseAllocations(saleItemForValidation.id, input.dealer_id);
+      const newBackorder = Math.max(0, Number(saleItemForValidation.backorder_qty) - input.qty);
+      const newAllocated = Math.min(Number(saleItemForValidation.allocated_qty), newBackorder);
       const newStatus = newBackorder <= 0 ? "fulfilled" : newAllocated >= newBackorder ? "ready_for_delivery" : newAllocated > 0 ? "partially_allocated" : "pending";
       await supabase.from("sale_items").update({
         backorder_qty: newBackorder,
         allocated_qty: newAllocated,
         fulfillment_status: newStatus,
-      } as any).eq("id", saleItem.id);
+      } as any).eq("id", saleItemForValidation.id);
       await backorderAllocationService.updateSaleBackorderFlag(input.sale_id);
     }
 
