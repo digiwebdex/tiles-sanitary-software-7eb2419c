@@ -318,7 +318,7 @@ const PricingPage = () => {
               { q: "How does yearly billing work?", a: "When you choose yearly billing, you pay for 10 months and get 12 — effectively saving 2 months compared to monthly billing. Billed as a single annual payment." },
               { q: "Can I change plans later?", a: "Yes, you can upgrade or downgrade your plan at any time. Changes take effect at the start of the next billing period." },
               { q: "Is there a free trial?", a: "Yes! All plans come with a trial period so you can explore the system before committing." },
-              { q: "What payment methods are accepted?", a: "We accept cash, bank transfer, and mobile banking (bKash, Nagad). Contact us for other options." },
+              { q: "What payment methods are accepted?", a: "Mobile Banking: bKash/Nagad (Personal) — 01674533303, Rocket — 016745333033. Bank Transfer: Md. Iqbal Hossain, Savings A/C 2706101077904, Routing 175260162, Pubali Bank Ltd, Asad Avenue, Mohammadpur, Dhaka-1207." },
               { q: "What does Multi-branch ready mean?", a: "Pro plan supports managing multiple store locations or branches from a single dashboard, with consolidated reporting." },
               { q: "Is my data safe?", a: "Absolutely. All data is encrypted, backed up daily, and isolated per dealer account with role-based access control." },
             ].map((faq, i) => (
