@@ -305,8 +305,8 @@ const DealerManagement = () => {
                         <TableCell>
                           <div className="flex items-center gap-1.5">
                             {subStatusBadge(d.subscription)}
-                            {d.subscription?.plans?.name && (
-                              <span className="text-xs text-muted-foreground">{d.subscription.plans.name}</span>
+                            {d.subscription?.subscription_plans?.name && (
+                              <span className="text-xs text-muted-foreground">{d.subscription.subscription_plans.name}</span>
                             )}
                           </div>
                         </TableCell>
@@ -547,7 +547,7 @@ const DealerManagement = () => {
                 {detailDealer.subscription ? (
                   <div className="grid grid-cols-2 gap-y-2 text-sm">
                     <span className="text-muted-foreground">Plan</span>
-                    <span className="text-foreground">{detailDealer.subscription.plans?.name ?? "—"}</span>
+                    <span className="text-foreground">{detailDealer.subscription.subscription_plans?.name ?? "—"}</span>
                     <span className="text-muted-foreground">Status</span>
                     <span>{subStatusBadge(detailDealer.subscription)}</span>
                     <span className="text-muted-foreground">Start</span>
