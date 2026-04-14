@@ -366,7 +366,8 @@ const PurchaseForm = ({ dealerId, showOfferPrice, onSubmit, isLoading }: Purchas
                       const rateChanged = lastInfo && lastInfo.purchase_rate > 0 && currentRate > 0 && currentRate !== lastInfo.purchase_rate;
 
                       return (
-                        <TableRow key={field.id}>
+                        <React.Fragment key={field.id}>
+                        <TableRow>
                           <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                           <TableCell>
                             <div className="text-sm font-medium">{product?.name ?? "—"}</div>
