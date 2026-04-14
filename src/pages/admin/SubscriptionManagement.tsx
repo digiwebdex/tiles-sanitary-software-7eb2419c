@@ -87,10 +87,14 @@ const SubscriptionManagement = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("subscriptions")
-        .select("*, dealers(name), plans(name, id)")
+        .select("*, dealers(name), subscription_plans!subscriptions_plan_id_fkey(name, id)")
         .order("start_date", { ascending: false });
       if (error) throw new Error(error.message);
-      return data as SubRow[];
+      // Map subscription_plans to plans key for compatibility
+      return (data ?? []).map((s: any) => ({
+        ...s,
+        plans: s.subscription_plans ?? s.plans ?? null,
+      })) as SubRow[];
     },
   });
 
