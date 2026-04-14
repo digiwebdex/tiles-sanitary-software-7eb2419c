@@ -196,11 +196,15 @@ const PurchaseForm = ({ dealerId, showOfferPrice, onSubmit, isLoading }: Purchas
     append({
       product_id: productId,
       quantity: 0,
-      purchase_rate: 0, // Do NOT auto-fill
+      purchase_rate: 0,
       offer_price: 0,
       transport_cost: 0,
       labor_cost: 0,
       other_cost: 0,
+      batch_no: "",
+      lot_no: "",
+      shade_code: "",
+      caliber: "",
     });
     setProductSearch("");
   };
@@ -496,9 +500,66 @@ const PurchaseForm = ({ dealerId, showOfferPrice, onSubmit, isLoading }: Purchas
                             </Button>
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
+                        {/* Batch fields row */}
+                        {product?.category === "tiles" && (
+                          <TableRow className="bg-muted/20 border-b">
+                            <TableCell></TableCell>
+                            <TableCell colSpan={showOfferPrice ? 9 : 8}>
+                              <div className="flex flex-wrap gap-2 py-1">
+                                <FormField
+                                  control={form.control}
+                                  name={`items.${idx}.batch_no`}
+                                  render={({ field: f }) => (
+                                    <FormItem className="space-y-0">
+                                      <FormControl>
+                                        <Input placeholder="Batch No" className="h-7 text-xs w-28" {...f} />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name={`items.${idx}.shade_code`}
+                                  render={({ field: f }) => (
+                                    <FormItem className="space-y-0">
+                                      <FormControl>
+                                        <Input placeholder="Shade" className="h-7 text-xs w-20" {...f} />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name={`items.${idx}.caliber`}
+                                  render={({ field: f }) => (
+                                    <FormItem className="space-y-0">
+                                      <FormControl>
+                                        <Input placeholder="Caliber" className="h-7 text-xs w-20" {...f} />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name={`items.${idx}.lot_no`}
+                                  render={({ field: f }) => (
+                                    <FormItem className="space-y-0">
+                                      <FormControl>
+                                        <Input placeholder="Lot No" className="h-7 text-xs w-24" {...f} />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <span className="text-[10px] text-muted-foreground self-center">Batch/Shade tracking</span>
+                              </div>
+                            </TableCell>
+                            <TableCell></TableCell>
+                          </TableRow>
+                        )}
+                      </>
+                    );
+                  })}
+                </TableBody>
                 </Table>
               </div>
             </CardContent>
