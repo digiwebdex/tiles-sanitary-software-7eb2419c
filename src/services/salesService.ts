@@ -27,6 +27,8 @@ export interface CreateSaleInput {
   notes?: string;
   created_by?: string;
   items: SaleItemInput[];
+  /** If true, allow sale even when stock is insufficient (backorder mode) */
+  allow_backorder?: boolean;
 }
 
 const PAGE_SIZE = 25;
@@ -36,7 +38,6 @@ async function generateInvoiceNumber(dealerId: string): Promise<string> {
     _dealer_id: dealerId,
   });
   if (error) {
-    // Fallback to count-based if RPC fails (e.g. function not deployed yet)
     const { count } = await supabase
       .from("sales")
       .select("id", { count: "exact", head: true })
@@ -45,6 +46,71 @@ async function generateInvoiceNumber(dealerId: string): Promise<string> {
     return `INV-${String(next).padStart(5, "0")}`;
   }
   return data as string;
+}
+
+/**
+ * Check if a dealer has backorder mode enabled
+ */
+async function isDealerBackorderEnabled(dealerId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("dealers")
+    .select("allow_backorder")
+    .eq("id", dealerId)
+    .single();
+  return (data as any)?.allow_backorder === true;
+}
+
+/**
+ * Check stock availability for sale items and return shortage info.
+ */
+export async function checkStockAvailability(
+  dealerId: string,
+  items: SaleItemInput[]
+): Promise<{
+  hasShortage: boolean;
+  backorderEnabled: boolean;
+  itemDetails: Array<{
+    product_id: string;
+    product_name: string;
+    unit_type: string;
+    requested: number;
+    available: number;
+    shortage: number;
+  }>;
+}> {
+  const backorderEnabled = await isDealerBackorderEnabled(dealerId);
+  const productIds = items.map(i => i.product_id);
+
+  const [productsRes, stockRes] = await Promise.all([
+    supabase.from("products").select("id, name, unit_type").in("id", productIds),
+    supabase.from("stock").select("product_id, box_qty, piece_qty").eq("dealer_id", dealerId).in("product_id", productIds),
+  ]);
+
+  const productMap = new Map((productsRes.data ?? []).map(p => [p.id, p]));
+  const stockMap = new Map((stockRes.data ?? []).map(s => [s.product_id, s]));
+
+  let hasShortage = false;
+  const itemDetails = items.map(item => {
+    const product = productMap.get(item.product_id);
+    const stock = stockMap.get(item.product_id);
+    const unitType = product?.unit_type ?? "piece";
+    const available = unitType === "box_sft"
+      ? Number(stock?.box_qty ?? 0)
+      : Number(stock?.piece_qty ?? 0);
+    const shortage = Math.max(0, item.quantity - available);
+    if (shortage > 0) hasShortage = true;
+
+    return {
+      product_id: item.product_id,
+      product_name: product?.name ?? "Unknown",
+      unit_type: unitType,
+      requested: item.quantity,
+      available,
+      shortage,
+    };
+  });
+
+  return { hasShortage, backorderEnabled, itemDetails };
 }
 
 export const salesService = {
@@ -106,15 +172,18 @@ export const salesService = {
       customerId = created!.id;
     }
 
-    // Service-level validation (validate items etc.)
+    // Service-level validation
     validateInput(createSaleServiceSchema, { ...input, customer_id: customerId });
+
+    // Check backorder mode
+    const backorderEnabled = input.allow_backorder || await isDealerBackorderEnabled(input.dealer_id);
 
     // Fetch product details + stock for avg cost
     const productIds = input.items.map((i) => i.product_id);
 
     const [productsRes, stockRes] = await Promise.all([
       supabase.from("products").select("id, unit_type, per_box_sft").in("id", productIds),
-      supabase.from("stock").select("product_id, average_cost_per_unit").eq("dealer_id", input.dealer_id).in("product_id", productIds),
+      supabase.from("stock").select("product_id, average_cost_per_unit, box_qty, piece_qty").eq("dealer_id", input.dealer_id).in("product_id", productIds),
     ]);
 
     if (productsRes.error) throw new Error(productsRes.error.message);
@@ -127,6 +196,7 @@ export const salesService = {
     let totalSft = 0;
     let totalPiece = 0;
     let totalCogs = 0;
+    let hasBackorder = false;
 
     const itemsCalc = input.items.map((item) => {
       const product = productMap.get(item.product_id);
@@ -137,30 +207,51 @@ export const salesService = {
       let itemTotal: number;
       let itemSft: number | null = null;
 
+      // Calculate available qty
+      const availableQty = unitType === "box_sft"
+        ? Number(stock?.box_qty ?? 0)
+        : Number(stock?.piece_qty ?? 0);
+      const shortage = Math.max(0, item.quantity - availableQty);
+
+      if (shortage > 0 && !backorderEnabled) {
+        throw new Error(
+          `Insufficient stock for product. Available: ${availableQty}, Requested: ${item.quantity}. Enable "Allow Sale Below Stock" in dealer settings.`
+        );
+      }
+
+      if (shortage > 0) {
+        hasBackorder = true;
+      }
+
       if (unitType === "box_sft") {
         totalBox += item.quantity;
         itemSft = item.quantity * perBoxSft;
         totalSft += itemSft;
-        // gross = total_sft × sale_rate
         itemTotal = itemSft * item.sale_rate;
       } else {
         totalPiece += item.quantity;
-        // gross = piece_qty × sale_rate
         itemTotal = item.quantity * item.sale_rate;
       }
 
       const itemCogs = item.quantity * avgCost;
       totalCogs += itemCogs;
 
-      return { ...item, total: itemTotal, total_sft: itemSft };
+      return {
+        ...item,
+        total: itemTotal,
+        total_sft: itemSft,
+        available_qty_at_sale: availableQty,
+        backorder_qty: shortage,
+        fulfillment_status: shortage > 0 ? "pending" : "fulfilled",
+      };
     });
 
     const subtotal = itemsCalc.reduce((s, i) => s + i.total, 0);
     const totalAmount = subtotal - input.discount;
     const dueAmount = totalAmount - input.paid_amount;
     const grossProfit = totalAmount - totalCogs;
-    const netProfit = grossProfit; // transport/labor already baked into landed_cost → COGS
-    const profit = grossProfit; // keep legacy field in sync
+    const netProfit = grossProfit;
+    const profit = grossProfit;
 
     const isChallanMode = input.sale_type === "challan_mode";
     const invoiceNumber = await generateInvoiceNumber(input.dealer_id);
@@ -191,6 +282,7 @@ export const salesService = {
         created_by: input.created_by || null,
         sale_type: input.sale_type || "direct_invoice",
         sale_status: isChallanMode ? "draft" : "invoiced",
+        has_backorder: hasBackorder,
       } as any)
       .select()
       .single();
@@ -204,15 +296,23 @@ export const salesService = {
       sale_rate: item.sale_rate,
       total: item.total,
       total_sft: item.total_sft,
+      available_qty_at_sale: item.available_qty_at_sale,
+      backorder_qty: item.backorder_qty,
+      allocated_qty: 0,
+      fulfillment_status: item.fulfillment_status,
     }));
 
-    const { error: iErr } = await supabase.from("sale_items").insert(itemRows);
+    const { error: iErr } = await supabase.from("sale_items").insert(itemRows as any);
     if (iErr) throw new Error(iErr.message);
 
     // For challan_mode: don't deduct stock or create ledger entries yet
     if (!isChallanMode) {
-      for (const item of input.items) {
-        await stockService.deductStock(item.product_id, item.quantity, input.dealer_id);
+      // Deduct only available stock (not backorder qty)
+      for (const item of itemsCalc) {
+        const deductQty = Math.min(item.quantity, item.available_qty_at_sale);
+        if (deductQty > 0) {
+          await stockService.deductStock(item.product_id, deductQty, input.dealer_id);
+        }
       }
 
       await customerLedgerService.addEntry({
@@ -221,7 +321,7 @@ export const salesService = {
         sale_id: sale!.id,
         type: "sale",
         amount: totalAmount,
-        description: `Sale ${invoiceNumber}`,
+        description: `Sale ${invoiceNumber}${hasBackorder ? " (Backorder)" : ""}`,
         entry_date: input.sale_date,
       });
 
@@ -262,6 +362,11 @@ export const salesService = {
         customer_id: customerId,
         total_amount: totalAmount,
         item_count: input.items.length,
+        has_backorder: hasBackorder,
+        backorder_items: itemsCalc.filter(i => i.backorder_qty > 0).map(i => ({
+          product_id: i.product_id,
+          backorder_qty: i.backorder_qty,
+        })),
       },
     });
 
@@ -286,8 +391,7 @@ export const salesService = {
         show_price: false,
       } as any);
 
-    // Fire-and-forget: notify owner via SMS/Email + customer SMS
-    // Non-blocking — sale is already committed; notification failure must never surface to user
+    // Fire-and-forget notifications
     void (async () => {
       try {
         const { data: customer } = await supabase
@@ -296,16 +400,15 @@ export const salesService = {
           .eq("id", customerId)
           .single();
 
-        // Fetch product names for SMS item details
         const productIds = input.items.map(i => i.product_id);
         const { data: products } = await supabase
           .from("products")
           .select("id, name, unit_type")
           .in("id", productIds);
-        const productMap = new Map((products ?? []).map(p => [p.id, p]));
+        const prodMap = new Map((products ?? []).map(p => [p.id, p]));
 
         const itemDetails = input.items.map(item => {
-          const prod = productMap.get(item.product_id);
+          const prod = prodMap.get(item.product_id);
           return {
             name: prod?.name ?? "Product",
             quantity: item.quantity,
@@ -315,7 +418,6 @@ export const salesService = {
           };
         });
 
-        // Get dealer name
         const { data: dealer } = await supabase
           .from("dealers")
           .select("name")
@@ -335,7 +437,7 @@ export const salesService = {
           dealer_name: dealer?.name ?? "",
         });
       } catch {
-        // Swallow — notification fetch failure must not surface
+        // Swallow
       }
     })();
 
@@ -534,7 +636,7 @@ export const salesService = {
     // 1. Fetch full sale with items and related records
     const { data: sale, error: fetchErr } = await supabase
       .from("sales")
-      .select("*, sale_items(product_id, quantity)")
+      .select("*, sale_items(product_id, quantity, backorder_qty, available_qty_at_sale)")
       .eq("id", saleId)
       .eq("dealer_id", dealerId)
       .single();
@@ -563,7 +665,7 @@ export const salesService = {
       .eq("dealer_id", dealerId);
     if ((deliveryCount ?? 0) > 0) throw new Error("Cannot delete a sale with existing deliveries");
 
-    // 4. Check if payment received (block if partial/full paid on invoiced sale)
+    // 4. Check if payment received
     if (Number(sale.paid_amount) > 0 && saleStatus === "invoiced") {
       throw new Error("Cannot delete a sale with payments recorded. Record a sales return instead.");
     }
@@ -572,37 +674,44 @@ export const salesService = {
 
     // 5. Reverse stock effects based on sale type/status
     if (saleType === "challan_mode" && (saleStatus === "challan_created" || saleStatus === "delivered")) {
-      // Challan mode: unreserve stock
       for (const item of items) {
         await stockService.unreserveStock(item.product_id, Number(item.quantity), dealerId);
       }
     } else if (saleStatus === "invoiced") {
-      // Direct invoice: restore deducted stock
+      // Restore only the actually-deducted stock (not backorder qty)
       for (const item of items) {
-        await stockService.restoreStock(item.product_id, Number(item.quantity), dealerId);
+        const deductedQty = Math.min(Number(item.quantity), Number(item.available_qty_at_sale || item.quantity));
+        if (deductedQty > 0) {
+          await stockService.restoreStock(item.product_id, deductedQty, dealerId);
+        }
       }
     }
-    // Draft challan_mode with no challan created: no stock to reverse
 
-    // 6. Delete ledger entries for this sale
+    // 6. Delete backorder allocations for this sale
+    const saleItemIds = items.map((i: any) => i.id).filter(Boolean);
+    if (saleItemIds.length > 0) {
+      await supabase.from("backorder_allocations").delete().in("sale_item_id", saleItemIds);
+    }
+
+    // 7. Delete ledger entries for this sale
     await supabase.from("customer_ledger").delete().eq("sale_id", saleId).eq("dealer_id", dealerId);
     await supabase.from("cash_ledger").delete().eq("reference_id", saleId).eq("dealer_id", dealerId);
 
-    // 7. Cancel related challans
+    // 8. Cancel related challans
     for (const ch of (challans ?? [])) {
       if ((ch as any).status !== "cancelled") {
         await supabase.from("challans").update({ status: "cancelled" } as any).eq("id", ch.id);
       }
     }
 
-    // 8. Delete sale items
+    // 9. Delete sale items
     await supabase.from("sale_items").delete().eq("sale_id", saleId);
 
-    // 9. Delete sale record
+    // 10. Delete sale record
     const { error: delErr } = await supabase.from("sales").delete().eq("id", saleId);
     if (delErr) throw new Error(delErr.message);
 
-    // 10. Audit log
+    // 11. Audit log
     await logAudit({
       dealer_id: dealerId,
       action: "sale_cancel_delete",
@@ -613,6 +722,7 @@ export const salesService = {
         total_amount: Number(sale.total_amount),
         customer_id: sale.customer_id,
         items_reversed: items.length,
+        had_backorder: (sale as any).has_backorder,
       },
     });
   },

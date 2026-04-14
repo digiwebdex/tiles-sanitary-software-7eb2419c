@@ -64,6 +64,65 @@ export type Database = {
           },
         ]
       }
+      backorder_allocations: {
+        Row: {
+          allocated_qty: number
+          created_at: string
+          dealer_id: string
+          id: string
+          product_id: string
+          purchase_item_id: string
+          sale_item_id: string
+        }
+        Insert: {
+          allocated_qty?: number
+          created_at?: string
+          dealer_id: string
+          id?: string
+          product_id: string
+          purchase_item_id: string
+          sale_item_id: string
+        }
+        Update: {
+          allocated_qty?: number
+          created_at?: string
+          dealer_id?: string
+          id?: string
+          product_id?: string
+          purchase_item_id?: string
+          sale_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backorder_allocations_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "dealers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backorder_allocations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backorder_allocations_purchase_item_id_fkey"
+            columns: ["purchase_item_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backorder_allocations_sale_item_id_fkey"
+            columns: ["sale_item_id"]
+            isOneToOne: false
+            referencedRelation: "sale_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       backup_logs: {
         Row: {
           app_name: string
@@ -542,6 +601,7 @@ export type Database = {
       dealers: {
         Row: {
           address: string | null
+          allow_backorder: boolean
           challan_template: string
           created_at: string
           id: string
@@ -551,6 +611,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          allow_backorder?: boolean
           challan_template?: string
           created_at?: string
           id?: string
@@ -560,6 +621,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          allow_backorder?: boolean
           challan_template?: string
           created_at?: string
           id?: string
@@ -1374,7 +1436,11 @@ export type Database = {
       }
       sale_items: {
         Row: {
+          allocated_qty: number
+          available_qty_at_sale: number
+          backorder_qty: number
           dealer_id: string
+          fulfillment_status: string
           id: string
           product_id: string
           quantity: number
@@ -1384,7 +1450,11 @@ export type Database = {
           total_sft: number | null
         }
         Insert: {
+          allocated_qty?: number
+          available_qty_at_sale?: number
+          backorder_qty?: number
           dealer_id: string
+          fulfillment_status?: string
           id?: string
           product_id: string
           quantity: number
@@ -1394,7 +1464,11 @@ export type Database = {
           total_sft?: number | null
         }
         Update: {
+          allocated_qty?: number
+          available_qty_at_sale?: number
+          backorder_qty?: number
           dealer_id?: string
+          fulfillment_status?: string
           id?: string
           product_id?: string
           quantity?: number
@@ -1440,6 +1514,7 @@ export type Database = {
           due_amount: number
           fitter_reference: string | null
           gross_profit: number
+          has_backorder: boolean
           id: string
           invoice_number: string | null
           net_profit: number
@@ -1467,6 +1542,7 @@ export type Database = {
           due_amount?: number
           fitter_reference?: string | null
           gross_profit?: number
+          has_backorder?: boolean
           id?: string
           invoice_number?: string | null
           net_profit?: number
@@ -1494,6 +1570,7 @@ export type Database = {
           due_amount?: number
           fitter_reference?: string | null
           gross_profit?: number
+          has_backorder?: boolean
           id?: string
           invoice_number?: string | null
           net_profit?: number
