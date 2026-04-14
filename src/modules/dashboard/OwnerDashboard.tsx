@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
 import { useNavigate } from "react-router-dom";
 import { dashboardService } from "@/services/dashboardService";
+import { backorderAllocationService } from "@/services/backorderAllocationService";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -475,6 +476,9 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
           <KpiCard title="Inventory Value" value={formatCurrency(data.totalStockValue)} icon={Layers} iconClass="text-primary" sub="At avg purchase rate" />
         </Section>
       )}
+
+      {/* Backorder Summary */}
+      <BackorderSummarySection dealerId={dealerId} navigate={navigate} />
 
       {/* Delivery Summary */}
       <Section title="Delivery Summary">
