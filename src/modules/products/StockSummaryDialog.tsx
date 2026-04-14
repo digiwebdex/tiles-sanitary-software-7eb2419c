@@ -3,12 +3,14 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Table, TableBody, TableCell, TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { Box, Layers, TrendingUp, TrendingDown, RotateCcw, DollarSign, BarChart3 } from "lucide-react";
+import { Box, Layers, TrendingUp, TrendingDown, RotateCcw, DollarSign, BarChart3, Package } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface StockSummaryDialogProps {
   open: boolean;
@@ -96,7 +98,22 @@ const StockSummaryDialog = ({ open, onOpenChange, product, dealerId }: StockSumm
     enabled: open && !!productId,
   });
 
-  const isLoading = loadStock || loadPurch || loadSold || loadRet || loadLast;
+  // Batch data
+  const { data: batches = [], isLoading: loadBatches } = useQuery({
+    queryKey: ["stock-summary-batches", productId, dealerId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("product_batches")
+        .select("*")
+        .eq("product_id", productId!)
+        .eq("dealer_id", dealerId)
+        .order("created_at", { ascending: true });
+      return data ?? [];
+    },
+    enabled: open && !!productId,
+  });
+
+  const isLoading = loadStock || loadPurch || loadSold || loadRet || loadLast || loadBatches;
 
   if (!product) return null;
 
@@ -107,7 +124,7 @@ const StockSummaryDialog = ({ open, onOpenChange, product, dealerId }: StockSumm
   const reservedPiece = Number(stock?.reserved_piece_qty) || 0;
   const avgCost = Number(stock?.average_cost_per_unit) || 0;
 
-  const rows: { icon: React.ReactNode; label: string; value: string; highlight?: string }[] = [];
+  const rows: { icon: React.ReactNode; label: string; value: string }[] = [];
 
   if (isBoxSft) {
     rows.push(
@@ -139,9 +156,12 @@ const StockSummaryDialog = ({ open, onOpenChange, product, dealerId }: StockSumm
     );
   }
 
+  const activeBatches = batches.filter((b: any) => b.status === "active");
+  const depletedBatches = batches.filter((b: any) => b.status === "depleted");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Stock Summary</DialogTitle>
         </DialogHeader>
@@ -156,19 +176,96 @@ const StockSummaryDialog = ({ open, onOpenChange, product, dealerId }: StockSumm
         {isLoading ? (
           <p className="text-sm text-muted-foreground py-4">Loading…</p>
         ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableBody>
-                {rows.map((r, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="w-8 py-2.5 pr-0">{r.icon}</TableCell>
-                    <TableCell className="py-2.5 text-sm text-muted-foreground">{r.label}</TableCell>
-                    <TableCell className="py-2.5 text-sm font-semibold text-right">{r.value}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="w-full">
+              <TabsTrigger value="overview" className="flex-1">Overview</TabsTrigger>
+              <TabsTrigger value="batches" className="flex-1">
+                Batches {activeBatches.length > 0 && <Badge variant="secondary" className="ml-1 text-[10px] px-1">{activeBatches.length}</Badge>}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview">
+              <div className="rounded-md border">
+                <Table>
+                  <TableBody>
+                    {rows.map((r, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="w-8 py-2.5 pr-0">{r.icon}</TableCell>
+                        <TableCell className="py-2.5 text-sm text-muted-foreground">{r.label}</TableCell>
+                        <TableCell className="py-2.5 text-sm font-semibold text-right">{r.value}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="batches">
+              {activeBatches.length === 0 && depletedBatches.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground">
+                  <Package className="mx-auto h-8 w-8 mb-2" />
+                  <p className="text-sm">No batch records yet</p>
+                  <p className="text-xs mt-1">Batches are created during purchases</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activeBatches.length > 0 && (
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="text-xs">Batch</TableHead>
+                            <TableHead className="text-xs">Shade</TableHead>
+                            <TableHead className="text-xs">Caliber</TableHead>
+                            <TableHead className="text-xs text-right">Qty</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {activeBatches.map((b: any) => (
+                            <TableRow key={b.id}>
+                              <TableCell className="py-2 text-xs">
+                                <div className="font-medium">{b.batch_no}</div>
+                                {b.lot_no && <div className="text-muted-foreground">Lot: {b.lot_no}</div>}
+                              </TableCell>
+                              <TableCell className="py-2 text-xs">{b.shade_code || "—"}</TableCell>
+                              <TableCell className="py-2 text-xs">{b.caliber || "—"}</TableCell>
+                              <TableCell className="py-2 text-xs text-right font-semibold">
+                                {isBoxSft
+                                  ? `${Number(b.box_qty)} Box`
+                                  : `${Number(b.piece_qty)} Pcs`}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+
+                  {depletedBatches.length > 0 && (
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                        {depletedBatches.length} depleted batch(es)
+                      </summary>
+                      <div className="rounded-md border mt-1">
+                        <Table>
+                          <TableBody>
+                            {depletedBatches.map((b: any) => (
+                              <TableRow key={b.id} className="opacity-50">
+                                <TableCell className="py-1.5 text-xs">{b.batch_no}</TableCell>
+                                <TableCell className="py-1.5 text-xs">{b.shade_code || "—"}</TableCell>
+                                <TableCell className="py-1.5 text-xs">{b.caliber || "—"}</TableCell>
+                                <TableCell className="py-1.5 text-xs text-right">0</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </details>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         )}
 
         <p className="text-xs text-muted-foreground text-center">Read-only view • Real-time stock data</p>
