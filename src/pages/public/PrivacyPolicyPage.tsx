@@ -264,7 +264,7 @@ const PrivacyPolicyPage = () => {
                   className="gap-2 px-8 h-12 border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10"
                 >
                   <Phone className="h-4 w-4" />
-                  +880 1234-567890
+                  +880 1674-533303
                 </Button>
               </a>
             </div>
