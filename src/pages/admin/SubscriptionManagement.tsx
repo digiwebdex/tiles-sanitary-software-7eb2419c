@@ -218,6 +218,8 @@ const SubscriptionManagement = () => {
       end_date: sub.end_date ?? "",
       status: sub.status,
       plan_id: sub.plan_id,
+      duration_type: "1month",
+      custom_months: "3",
     });
     setEditOpen(true);
   };
