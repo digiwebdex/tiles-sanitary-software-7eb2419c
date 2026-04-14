@@ -864,4 +864,52 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
   );
 };
 
+
+/* Backorder Summary Section */
+function BackorderSummarySection({ dealerId, navigate }: { dealerId: string; navigate: (path: string) => void }) {
+  const { data: backorderStats } = useQuery({
+    queryKey: ["dashboard-backorder-stats", dealerId],
+    queryFn: () => backorderAllocationService.getDashboardStats(dealerId),
+    enabled: !!dealerId,
+  });
+
+  const total = (backorderStats?.totalBackorders ?? 0) + (backorderStats?.pendingFulfillment ?? 0) + (backorderStats?.readyForDelivery ?? 0);
+  if (total === 0) return null;
+
+  return (
+    <Section title="Backorder & Fulfillment">
+      <Card className="cursor-pointer hover:border-primary/50 transition-colors border-amber-300/50" onClick={() => navigate("/reports")}>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+          <CardTitle className="text-xs font-medium text-muted-foreground">Active Backorders</CardTitle>
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+        </CardHeader>
+        <CardContent>
+          <p className="text-lg font-bold text-amber-600">{backorderStats?.totalBackorders ?? 0}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Items awaiting stock</p>
+        </CardContent>
+      </Card>
+      <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate("/reports")}>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+          <CardTitle className="text-xs font-medium text-muted-foreground">Pending Fulfillment</CardTitle>
+          <Package className="h-4 w-4 text-orange-600" />
+        </CardHeader>
+        <CardContent>
+          <p className="text-lg font-bold text-orange-600">{backorderStats?.pendingFulfillment ?? 0}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Not yet fully delivered</p>
+        </CardContent>
+      </Card>
+      <Card className="cursor-pointer hover:border-primary/50 transition-colors border-blue-300/50" onClick={() => navigate("/reports")}>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+          <CardTitle className="text-xs font-medium text-muted-foreground">Ready for Delivery</CardTitle>
+          <PackageCheck className="h-4 w-4 text-blue-600" />
+        </CardHeader>
+        <CardContent>
+          <p className="text-lg font-bold text-blue-600">{backorderStats?.readyForDelivery ?? 0}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Allocated, awaiting dispatch</p>
+        </CardContent>
+      </Card>
+    </Section>
+  );
+}
+
 export default OwnerDashboard;
