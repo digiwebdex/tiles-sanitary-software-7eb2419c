@@ -573,6 +573,49 @@ const DealerManagement = () => {
         </DialogContent>
       </Dialog>
 
+      {/* ─── Change Plan Dialog ─── */}
+      <Dialog open={changePlanOpen} onOpenChange={setChangePlanOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change Plan — {changePlanDealerName}</DialogTitle>
+            <DialogDescription>
+              {changePlanHasExisting ? "Update the subscription plan for this dealer." : "Assign a new subscription plan to this dealer."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Plan *</Label>
+              <Select value={changePlanForm.plan_id} onValueChange={(v) => setChangePlanForm({ ...changePlanForm, plan_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Select plan" /></SelectTrigger>
+                <SelectContent>
+                  {plans.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} — {formatCurrency(p.price_monthly)}/mo
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Start Date</Label>
+                <Input type="date" value={changePlanForm.start_date} onChange={(e) => setChangePlanForm({ ...changePlanForm, start_date: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>End Date</Label>
+                <Input type="date" value={changePlanForm.end_date} onChange={(e) => setChangePlanForm({ ...changePlanForm, end_date: e.target.value })} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChangePlanOpen(false)}>Cancel</Button>
+            <Button onClick={() => changePlanMutation.mutate()} disabled={changePlanMutation.isPending}>
+              {changePlanMutation.isPending ? "Saving…" : changePlanHasExisting ? "Update Plan" : "Assign Plan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ─── Dealer Detail Sheet ─── */}
       <Sheet open={!!detailDealer} onOpenChange={(open) => !open && setDetailDealer(null)}>
         <SheetContent className="sm:max-w-lg overflow-y-auto">
