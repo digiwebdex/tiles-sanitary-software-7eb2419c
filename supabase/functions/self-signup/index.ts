@@ -7,6 +7,37 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Helper to create notification record and invoke send-notification
+async function sendNotification(
+  client: any,
+  opts: { dealer_id: string; channel: "sms" | "email"; type: string; recipient: string; message: string; subject?: string }
+) {
+  const { data: notif } = await client.from("notifications").insert({
+    dealer_id: opts.dealer_id,
+    channel: opts.channel,
+    type: opts.type,
+    status: "pending",
+    payload: { _custom_message: opts.message, ...(opts.subject ? { _subject: opts.subject } : {}) },
+  }).select("id").single();
+
+  if (!notif) return;
+
+  try {
+    await client.functions.invoke("send-notification", {
+      body: {
+        notification_id: notif.id,
+        dealer_id: opts.dealer_id,
+        channel: opts.channel,
+        type: opts.type,
+        payload: { _custom_message: opts.message },
+        recipient: opts.recipient,
+      },
+    });
+  } catch (err) {
+    console.error(`[sendNotification] Failed ${opts.channel} to ${opts.recipient}:`, err);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
