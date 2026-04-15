@@ -545,12 +545,29 @@ export const salesService = {
     const oldCustomerId = oldSale.customer_id;
     const oldPaidAmount = Number(oldSale.paid_amount);
 
-    // 2. Restore old stock + batch allocations (atomic RPC handles batch + aggregate stock together)
+    // 2. Restore old stock + batch allocations
+    // Atomic RPC restores batch portion + its aggregate stock.
+    // For unbatched items (legacy), restore aggregate stock separately.
     for (const item of oldItems) {
       const product = await supabase.from("products").select("unit_type, per_box_sft").eq("id", item.product_id).single();
       const unitType = (product.data?.unit_type ?? "piece") as "box_sft" | "piece";
       const perBoxSft = product.data?.per_box_sft ?? null;
+
+      // Check how much was batch-allocated before restoring
+      const { data: batchAllocs } = await supabase
+        .from("sale_item_batches")
+        .select("allocated_qty")
+        .eq("sale_item_id", item.id);
+      const batchAllocated = (batchAllocs ?? []).reduce((s: number, a: any) => s + Number(a.allocated_qty), 0);
+
+      // Restore batch allocations atomically (handles batch + aggregate for batched portion)
       await batchService.restoreBatchAllocations(item.id, item.product_id, input.dealer_id, unitType, perBoxSft);
+
+      // Restore unbatched portion of aggregate stock
+      const unbatchedQty = Number(item.quantity) - batchAllocated;
+      if (unbatchedQty > 0) {
+        await stockService.restoreStock(item.product_id, unbatchedQty, input.dealer_id);
+      }
     }
 
     // 3. Delete old ledger entries for this sale
