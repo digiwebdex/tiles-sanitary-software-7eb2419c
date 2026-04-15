@@ -861,6 +861,78 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Mixed Shade/Caliber Warning Dialog */}
+      <AlertDialog open={mixedBatchDialogOpen} onOpenChange={setMixedBatchDialogOpen}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <Layers className="h-5 w-5" />
+              Mixed Shade / Caliber Warning
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  The following items will be allocated from <strong>batches with different {mixedBatchInfo?.has_mixed_shade ? "shades" : ""}{mixedBatchInfo?.has_mixed_shade && mixedBatchInfo?.has_mixed_caliber ? " and " : ""}{mixedBatchInfo?.has_mixed_caliber ? "calibers" : ""}</strong>.
+                  This may cause visual inconsistency for the customer.
+                </p>
+                <div className="rounded-md border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium">Product</th>
+                        <th className="text-left px-3 py-2 font-medium">Batch</th>
+                        <th className="text-center px-3 py-2 font-medium">Shade</th>
+                        <th className="text-center px-3 py-2 font-medium">Caliber</th>
+                        <th className="text-center px-3 py-2 font-medium">Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mixedBatchInfo?.item_allocations.map((ia, i) =>
+                        ia.allocation.allocations.map((alloc, j) => (
+                          <tr key={`${i}-${j}`} className="border-t">
+                            {j === 0 && (
+                              <td className="px-3 py-2 text-left font-medium" rowSpan={ia.allocation.allocations.length}>
+                                {ia.product_name}
+                              </td>
+                            )}
+                            <td className="px-3 py-2 text-left font-mono text-xs">{alloc.batch_no}</td>
+                            <td className="px-3 py-2 text-center">
+                              {alloc.shade_code ? (
+                                <Badge variant="outline" className="text-[10px]">{alloc.shade_code}</Badge>
+                              ) : <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {alloc.caliber ? (
+                                <Badge variant="outline" className="text-[10px]">{alloc.caliber}</Badge>
+                              ) : <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="px-3 py-2 text-center font-semibold">{alloc.allocated_qty}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  ⚠ Proceeding will allocate stock from mixed batches. Consider splitting the order or waiting for matching stock.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setPendingValues(null); setMixedBatchInfo(null); }}>
+              Cancel Sale
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleMixedBatchConfirm}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              Proceed with Mixed Batches
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
