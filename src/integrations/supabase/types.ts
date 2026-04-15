@@ -2209,7 +2209,28 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      allocate_sale_batches: {
+        Args: {
+          _allocations: Json
+          _dealer_id: string
+          _per_box_sft: number
+          _product_id: string
+          _sale_item_id: string
+          _unit_type: string
+        }
+        Returns: undefined
+      }
       check_account_locked: { Args: { _email: string }; Returns: Json }
+      deduct_stock_unbatched: {
+        Args: {
+          _dealer_id: string
+          _per_box_sft: number
+          _product_id: string
+          _quantity: number
+          _unit_type: string
+        }
+        Returns: undefined
+      }
       generate_next_challan_no: {
         Args: { _dealer_id: string }
         Returns: string
@@ -2233,6 +2254,16 @@ export type Database = {
         Returns: Json
       }
       record_successful_login: { Args: { _email: string }; Returns: undefined }
+      restore_sale_batches: {
+        Args: {
+          _dealer_id: string
+          _per_box_sft: number
+          _product_id: string
+          _sale_item_id: string
+          _unit_type: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "super_admin" | "dealer_admin" | "salesman"
