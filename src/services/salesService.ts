@@ -545,16 +545,12 @@ export const salesService = {
     const oldCustomerId = oldSale.customer_id;
     const oldPaidAmount = Number(oldSale.paid_amount);
 
-    // 2. Restore old stock + batch allocations
+    // 2. Restore old stock + batch allocations (atomic RPC handles batch + aggregate stock together)
     for (const item of oldItems) {
-      // Restore batch allocations first
       const product = await supabase.from("products").select("unit_type, per_box_sft").eq("id", item.product_id).single();
       const unitType = (product.data?.unit_type ?? "piece") as "box_sft" | "piece";
       const perBoxSft = product.data?.per_box_sft ?? null;
-      await batchService.restoreBatchAllocations(item.id, unitType, perBoxSft);
-
-      // Then restore aggregate stock
-      await stockService.restoreStock(item.product_id, Number(item.quantity), input.dealer_id);
+      await batchService.restoreBatchAllocations(item.id, item.product_id, input.dealer_id, unitType, perBoxSft);
     }
 
     // 3. Delete old ledger entries for this sale
@@ -680,19 +676,21 @@ export const salesService = {
       const perBoxSft = product?.per_box_sft ?? null;
       const saleItemId = saleItemMap.get(item.product_id);
 
-      // FIFO batch allocation
+      // Atomic FIFO batch allocation
       if (saleItemId) {
         const allocation = await batchService.planFIFOAllocation(
           item.product_id, input.dealer_id, item.quantity, unitType
         );
         if (allocation.allocations.length > 0) {
           await batchService.executeSaleAllocation(
-            saleItemId, input.dealer_id, allocation.allocations, unitType, perBoxSft
+            saleItemId, input.dealer_id, item.product_id, allocation.allocations, unitType, perBoxSft
           );
+        } else {
+          await batchService.deductStockUnbatched(item.product_id, input.dealer_id, item.quantity, unitType, perBoxSft);
         }
+      } else {
+        await stockService.deductStock(item.product_id, item.quantity, input.dealer_id);
       }
-
-      await stockService.deductStock(item.product_id, item.quantity, input.dealer_id);
     }
 
     // 10. Re-create ledger entries
@@ -786,12 +784,12 @@ export const salesService = {
 
     const items = (sale as any).sale_items ?? [];
 
-    // 5. Restore batch allocations for each sale item
+    // 5. Restore batch allocations atomically (handles batch + aggregate stock in one transaction)
     for (const item of items) {
       const { data: product } = await supabase.from("products").select("unit_type, per_box_sft").eq("id", item.product_id).single();
       const unitType = (product?.unit_type ?? "piece") as "box_sft" | "piece";
       const perBoxSft = product?.per_box_sft ?? null;
-      await batchService.restoreBatchAllocations(item.id, unitType, perBoxSft);
+      await batchService.restoreBatchAllocations(item.id, item.product_id, dealerId, unitType, perBoxSft);
     }
 
     // 6. Reverse stock effects based on sale type/status
