@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Search, Barcode, AlertTriangle, PackageX } from "lucide-react";
+import { Plus, Trash2, Search, Barcode, AlertTriangle, PackageX, Layers } from "lucide-react";
 import { formatCurrency, CURRENCY_CODE } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Separator } from "@/components/ui/separator";
@@ -29,6 +29,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { previewBatchAllocation } from "@/services/salesService";
+import type { FIFOAllocationResult } from "@/services/batchService";
 
 interface StockShortageItem {
   product_name: string;
@@ -53,6 +55,15 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
   const [backorderDialogOpen, setBackorderDialogOpen] = useState(false);
   const [shortageItems, setShortageItems] = useState<StockShortageItem[]>([]);
   const [pendingValues, setPendingValues] = useState<SaleFormValues | null>(null);
+  const [mixedBatchDialogOpen, setMixedBatchDialogOpen] = useState(false);
+  const [mixedBatchInfo, setMixedBatchInfo] = useState<{
+    has_mixed_shade: boolean;
+    has_mixed_caliber: boolean;
+    item_allocations: Array<{
+      product_name: string;
+      allocation: FIFOAllocationResult;
+    }>;
+  } | null>(null);
 
   const form = useForm<SaleFormValues>({
     resolver: zodResolver(saleSchema),
@@ -272,29 +283,70 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
 
     if (shortages.length > 0) {
       if (!backorderEnabled) {
-        // Strict mode — block the sale
         const msg = shortages.map(s =>
           `${s.product_name}: Available ${s.available} ${s.unit_label}, Requested ${s.requested} ${s.unit_label}`
         ).join("\n");
         throw new Error(`Insufficient stock:\n${msg}\n\nEnable "Allow Sale Below Stock" in dealer settings to create backorder sales.`);
       }
-      // Backorder mode — show confirmation dialog
       setShortageItems(shortages);
       setPendingValues(values);
       setBackorderDialogOpen(true);
       return;
     }
 
-    // No shortage — proceed normally
-    await onSubmit(values);
+    // Check for mixed shade/caliber batches (tiles only)
+    await checkMixedBatchAndSubmit(values);
+  };
+
+  const checkMixedBatchAndSubmit = async (values: SaleFormValues, flags?: { allow_backorder?: boolean }) => {
+    try {
+      const tileItems = values.items.filter(i => {
+        if (!i.product_id || !i.quantity) return false;
+        const p = getProduct(i.product_id);
+        return p?.unit_type === "box_sft";
+      });
+
+      if (tileItems.length > 0) {
+        const validItems = tileItems.map(i => ({
+          product_id: i.product_id!,
+          quantity: i.quantity!,
+          sale_rate: i.sale_rate ?? 0,
+        }));
+        const preview = await previewBatchAllocation(dealerId, validItems);
+        if (preview.has_mixed_shade || preview.has_mixed_caliber) {
+          setMixedBatchInfo({
+            has_mixed_shade: preview.has_mixed_shade,
+            has_mixed_caliber: preview.has_mixed_caliber,
+            item_allocations: preview.item_allocations.filter(
+              ia => ia.allocation.has_mixed_shade || ia.allocation.has_mixed_caliber
+            ),
+          });
+          setPendingValues(values);
+          setMixedBatchDialogOpen(true);
+          return;
+        }
+      }
+    } catch {
+      // If batch preview fails, proceed without warning (legacy/unbatched stock)
+    }
+
+    await onSubmit({ ...values, ...flags } as any);
   };
 
   const handleBackorderConfirm = async () => {
     setBackorderDialogOpen(false);
     if (pendingValues) {
-      await onSubmit({ ...pendingValues, allow_backorder: true } as any);
-      setPendingValues(null);
+      await checkMixedBatchAndSubmit(pendingValues, { allow_backorder: true });
       setShortageItems([]);
+    }
+  };
+
+  const handleMixedBatchConfirm = async () => {
+    setMixedBatchDialogOpen(false);
+    if (pendingValues) {
+      await onSubmit({ ...pendingValues, mixed_batch_acknowledged: true } as any);
+      setPendingValues(null);
+      setMixedBatchInfo(null);
     }
   };
 
@@ -805,6 +857,78 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
               className="bg-amber-600 hover:bg-amber-700 text-white"
             >
               Confirm Backorder Sale
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Mixed Shade/Caliber Warning Dialog */}
+      <AlertDialog open={mixedBatchDialogOpen} onOpenChange={setMixedBatchDialogOpen}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <Layers className="h-5 w-5" />
+              Mixed Shade / Caliber Warning
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  The following items will be allocated from <strong>batches with different {mixedBatchInfo?.has_mixed_shade ? "shades" : ""}{mixedBatchInfo?.has_mixed_shade && mixedBatchInfo?.has_mixed_caliber ? " and " : ""}{mixedBatchInfo?.has_mixed_caliber ? "calibers" : ""}</strong>.
+                  This may cause visual inconsistency for the customer.
+                </p>
+                <div className="rounded-md border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium">Product</th>
+                        <th className="text-left px-3 py-2 font-medium">Batch</th>
+                        <th className="text-center px-3 py-2 font-medium">Shade</th>
+                        <th className="text-center px-3 py-2 font-medium">Caliber</th>
+                        <th className="text-center px-3 py-2 font-medium">Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mixedBatchInfo?.item_allocations.map((ia, i) =>
+                        ia.allocation.allocations.map((alloc, j) => (
+                          <tr key={`${i}-${j}`} className="border-t">
+                            {j === 0 && (
+                              <td className="px-3 py-2 text-left font-medium" rowSpan={ia.allocation.allocations.length}>
+                                {ia.product_name}
+                              </td>
+                            )}
+                            <td className="px-3 py-2 text-left font-mono text-xs">{alloc.batch_no}</td>
+                            <td className="px-3 py-2 text-center">
+                              {alloc.shade_code ? (
+                                <Badge variant="outline" className="text-[10px]">{alloc.shade_code}</Badge>
+                              ) : <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {alloc.caliber ? (
+                                <Badge variant="outline" className="text-[10px]">{alloc.caliber}</Badge>
+                              ) : <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="px-3 py-2 text-center font-semibold">{alloc.allocated_qty}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  ⚠ Proceeding will allocate stock from mixed batches. Consider splitting the order or waiting for matching stock.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setPendingValues(null); setMixedBatchInfo(null); }}>
+              Cancel Sale
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleMixedBatchConfirm}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              Proceed with Mixed Batches
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

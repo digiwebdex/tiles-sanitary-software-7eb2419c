@@ -153,7 +153,7 @@ export const purchaseService = {
       const perBoxSft = product?.per_box_sft ?? null;
 
       // Create or top-up batch
-      const batchNo = originalItem.batch_no?.trim() || `AUTO-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+      const batchNo = originalItem.batch_no?.trim() || batchService.generateAutoBatchNo();
       const { batch_id } = await batchService.findOrCreateBatch(
         {
           dealer_id: input.dealer_id,

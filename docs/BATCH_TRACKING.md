@@ -20,12 +20,19 @@ Track tile stock by batch/lot/shade/caliber so the system can prevent mixed-shad
 1. One purchase line = one batch
 2. Same SKU + same shade + caliber + lot + batch_no → merge (top-up)
 3. Different shade/caliber → new batch
-4. Sanitary items → DEFAULT batch auto-created
+4. Sanitary items → DEFAULT batch auto-created (collision-safe: AUTO-YYYYMMDD-XXXXX)
 5. Sale allocation uses FIFO (oldest batch first)
-6. Mixed-shade allocation triggers warning
+6. Mixed-shade allocation triggers warning dialog
 7. Backorder qty remains batch-unassigned until future purchase
+8. Zero qty → batch marked depleted; future top-up reactivates
+9. Legacy stock without batches: treated as unbatched, no batch allocation attempted
+
+## Merge Safety
+- DB unique constraint not possible (nullable shade/caliber/lot columns)
+- Service-layer guard: `findOrCreateBatch` does exact matching treating null/empty as equivalent
+- Prevents duplicate batch rows for same identity
 
 ## Implementation Batches
 - **Batch 1** (Done): Schema + Purchase flow + Batch stock summary
-- **Batch 2** (Planned): Sale allocation + Mixed-shade warnings
+- **Batch 2** (Done): Sale FIFO allocation + Mixed-shade warnings + sale_item_batches + batch deduction
 - **Batch 3** (Planned): Delivery batch flow + Reports
