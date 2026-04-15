@@ -368,6 +368,9 @@ export const salesService = {
     // For challan_mode: don't deduct stock or create ledger entries yet
     if (!isChallanMode) {
       // FIFO batch allocation + stock deduction for each item
+      // ATOMIC: Each item uses a server-side RPC that locks batch rows,
+      // deducts batches, inserts sale_item_batches, and updates aggregate stock
+      // in a single DB transaction. On failure, the entire transaction rolls back.
       for (const item of itemsCalc) {
         const deductQty = Math.min(item.quantity, item.available_qty_at_sale);
         if (deductQty <= 0) continue;
@@ -377,28 +380,24 @@ export const salesService = {
         const perBoxSft = product?.per_box_sft ?? null;
         const saleItemId = saleItemMap.get(item.product_id);
 
-        // Try FIFO batch allocation
         if (saleItemId) {
           const allocation = await batchService.planFIFOAllocation(
             item.product_id, input.dealer_id, deductQty, unitType
           );
 
           if (allocation.allocations.length > 0) {
-            // Execute batch-level deduction + create sale_item_batches
+            // Atomic: batch deduction + sale_item_batches + aggregate stock in one transaction
             await batchService.executeSaleAllocation(
-              saleItemId, input.dealer_id, allocation.allocations, unitType, perBoxSft
+              saleItemId, input.dealer_id, item.product_id, allocation.allocations, unitType, perBoxSft
             );
-
-            // Update allocated_qty on sale_item
-            const totalAllocated = allocation.allocations.reduce((s, a) => s + a.allocated_qty, 0);
-            await supabase.from("sale_items").update({
-              allocated_qty: totalAllocated,
-            } as any).eq("id", saleItemId);
+          } else {
+            // Legacy/unbatched product: deduct aggregate stock only (atomic RPC)
+            await batchService.deductStockUnbatched(item.product_id, input.dealer_id, deductQty, unitType, perBoxSft);
           }
+        } else {
+          // Fallback: deduct aggregate stock
+          await stockService.deductStock(item.product_id, deductQty, input.dealer_id);
         }
-
-        // Deduct from aggregate stock (always, regardless of batch availability)
-        await stockService.deductStock(item.product_id, deductQty, input.dealer_id);
       }
 
       await customerLedgerService.addEntry({
@@ -547,15 +546,28 @@ export const salesService = {
     const oldPaidAmount = Number(oldSale.paid_amount);
 
     // 2. Restore old stock + batch allocations
+    // Atomic RPC restores batch portion + its aggregate stock.
+    // For unbatched items (legacy), restore aggregate stock separately.
     for (const item of oldItems) {
-      // Restore batch allocations first
       const product = await supabase.from("products").select("unit_type, per_box_sft").eq("id", item.product_id).single();
       const unitType = (product.data?.unit_type ?? "piece") as "box_sft" | "piece";
       const perBoxSft = product.data?.per_box_sft ?? null;
-      await batchService.restoreBatchAllocations(item.id, unitType, perBoxSft);
 
-      // Then restore aggregate stock
-      await stockService.restoreStock(item.product_id, Number(item.quantity), input.dealer_id);
+      // Check how much was batch-allocated before restoring
+      const { data: batchAllocs } = await supabase
+        .from("sale_item_batches")
+        .select("allocated_qty")
+        .eq("sale_item_id", item.id);
+      const batchAllocated = (batchAllocs ?? []).reduce((s: number, a: any) => s + Number(a.allocated_qty), 0);
+
+      // Restore batch allocations atomically (handles batch + aggregate for batched portion)
+      await batchService.restoreBatchAllocations(item.id, item.product_id, input.dealer_id, unitType, perBoxSft);
+
+      // Restore unbatched portion of aggregate stock
+      const unbatchedQty = Number(item.quantity) - batchAllocated;
+      if (unbatchedQty > 0) {
+        await stockService.restoreStock(item.product_id, unbatchedQty, input.dealer_id);
+      }
     }
 
     // 3. Delete old ledger entries for this sale
@@ -681,19 +693,21 @@ export const salesService = {
       const perBoxSft = product?.per_box_sft ?? null;
       const saleItemId = saleItemMap.get(item.product_id);
 
-      // FIFO batch allocation
+      // Atomic FIFO batch allocation
       if (saleItemId) {
         const allocation = await batchService.planFIFOAllocation(
           item.product_id, input.dealer_id, item.quantity, unitType
         );
         if (allocation.allocations.length > 0) {
           await batchService.executeSaleAllocation(
-            saleItemId, input.dealer_id, allocation.allocations, unitType, perBoxSft
+            saleItemId, input.dealer_id, item.product_id, allocation.allocations, unitType, perBoxSft
           );
+        } else {
+          await batchService.deductStockUnbatched(item.product_id, input.dealer_id, item.quantity, unitType, perBoxSft);
         }
+      } else {
+        await stockService.deductStock(item.product_id, item.quantity, input.dealer_id);
       }
-
-      await stockService.deductStock(item.product_id, item.quantity, input.dealer_id);
     }
 
     // 10. Re-create ledger entries
@@ -787,26 +801,34 @@ export const salesService = {
 
     const items = (sale as any).sale_items ?? [];
 
-    // 5. Restore batch allocations for each sale item
+    // 5. Restore batch allocations atomically + handle unbatched remainder
     for (const item of items) {
       const { data: product } = await supabase.from("products").select("unit_type, per_box_sft").eq("id", item.product_id).single();
       const unitType = (product?.unit_type ?? "piece") as "box_sft" | "piece";
       const perBoxSft = product?.per_box_sft ?? null;
-      await batchService.restoreBatchAllocations(item.id, unitType, perBoxSft);
+
+      // Check batch-allocated amount before restoring (RPC deletes these records)
+      const { data: batchAllocs } = await supabase
+        .from("sale_item_batches")
+        .select("allocated_qty")
+        .eq("sale_item_id", item.id);
+      const batchAllocated = (batchAllocs ?? []).reduce((s: number, a: any) => s + Number(a.allocated_qty), 0);
+
+      // Atomic: restore batch quantities + aggregate stock for batched portion
+      await batchService.restoreBatchAllocations(item.id, item.product_id, dealerId, unitType, perBoxSft);
+
+      // Restore unbatched portion separately
+      const deductedQty = Math.min(Number(item.quantity), Number(item.available_qty_at_sale || item.quantity));
+      const unbatchedQty = deductedQty - batchAllocated;
+      if (unbatchedQty > 0) {
+        await stockService.restoreStock(item.product_id, unbatchedQty, dealerId);
+      }
     }
 
-    // 6. Reverse stock effects based on sale type/status
+    // 6. Reverse reserved stock for challan-mode sales
     if (saleType === "challan_mode" && (saleStatus === "challan_created" || saleStatus === "delivered")) {
       for (const item of items) {
         await stockService.unreserveStock(item.product_id, Number(item.quantity), dealerId);
-      }
-    } else if (saleStatus === "invoiced") {
-      // Restore only the actually-deducted stock (not backorder qty)
-      for (const item of items) {
-        const deductedQty = Math.min(Number(item.quantity), Number(item.available_qty_at_sale || item.quantity));
-        if (deductedQty > 0) {
-          await stockService.restoreStock(item.product_id, deductedQty, dealerId);
-        }
       }
     }
 
