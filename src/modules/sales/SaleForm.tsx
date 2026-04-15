@@ -29,6 +29,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { previewBatchAllocation } from "@/services/salesService";
+import type { FIFOAllocationResult } from "@/services/batchService";
 
 interface StockShortageItem {
   product_name: string;
