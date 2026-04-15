@@ -353,7 +353,7 @@ const ProductList = ({ dealerId }: ProductListProps) => {
               </TableHeader>
               <TableBody>
                 {products.map((p) => {
-                  const stockInfo = stockData?.get(p.id) ?? { total: 0, box: 0, sft: 0, piece: 0 };
+                  const stockInfo = stockData?.get(p.id) ?? { total: 0, box: 0, sft: 0, piece: 0, reservedBox: 0, reservedPiece: 0 };
                   const qty = stockInfo.total;
                   const costPerUnit = Math.max(0, costData?.get(p.id) ?? 0);
                   const reorder = p.reorder_level ?? 0;
