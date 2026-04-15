@@ -6,6 +6,7 @@ import { validateInput, createSaleServiceSchema } from "@/lib/validators";
 import { assertDealerId } from "@/lib/tenancy";
 import { rateLimits } from "@/lib/rateLimit";
 import { notificationService } from "@/services/notificationService";
+import { batchService, type FIFOAllocationResult } from "@/services/batchService";
 
 export interface SaleItemInput {
   product_id: string;
@@ -29,6 +30,8 @@ export interface CreateSaleInput {
   items: SaleItemInput[];
   /** If true, allow sale even when stock is insufficient (backorder mode) */
   allow_backorder?: boolean;
+  /** If true, user has acknowledged mixed shade/caliber warning */
+  mixed_batch_acknowledged?: boolean;
 }
 
 const PAGE_SIZE = 25;
@@ -111,6 +114,58 @@ export async function checkStockAvailability(
   });
 
   return { hasShortage, backorderEnabled, itemDetails };
+}
+
+/**
+ * Preview batch allocation for sale items (used by UI for mixed-shade warning).
+ */
+export async function previewBatchAllocation(
+  dealerId: string,
+  items: SaleItemInput[]
+): Promise<{
+  has_mixed_shade: boolean;
+  has_mixed_caliber: boolean;
+  item_allocations: Array<{
+    product_id: string;
+    product_name: string;
+    allocation: FIFOAllocationResult;
+  }>;
+}> {
+  const productIds = items.map(i => i.product_id);
+  const { data: products } = await supabase
+    .from("products")
+    .select("id, name, unit_type")
+    .in("id", productIds);
+  const productMap = new Map((products ?? []).map(p => [p.id, p]));
+
+  let globalMixedShade = false;
+  let globalMixedCaliber = false;
+  const itemAllocations = [];
+
+  for (const item of items) {
+    if (!item.product_id || !item.quantity) continue;
+    const product = productMap.get(item.product_id);
+    const unitType = (product?.unit_type ?? "piece") as "box_sft" | "piece";
+
+    const allocation = await batchService.planFIFOAllocation(
+      item.product_id, dealerId, item.quantity, unitType
+    );
+
+    if (allocation.has_mixed_shade) globalMixedShade = true;
+    if (allocation.has_mixed_caliber) globalMixedCaliber = true;
+
+    itemAllocations.push({
+      product_id: item.product_id,
+      product_name: product?.name ?? "Unknown",
+      allocation,
+    });
+  }
+
+  return {
+    has_mixed_shade: globalMixedShade,
+    has_mixed_caliber: globalMixedCaliber,
+    item_allocations: itemAllocations,
+  };
 }
 
 export const salesService = {
@@ -302,17 +357,48 @@ export const salesService = {
       fulfillment_status: item.fulfillment_status,
     }));
 
-    const { error: iErr } = await supabase.from("sale_items").insert(itemRows as any);
+    const { data: insertedSaleItems, error: iErr } = await supabase
+      .from("sale_items")
+      .insert(itemRows as any)
+      .select("id, product_id");
     if (iErr) throw new Error(iErr.message);
+
+    const saleItemMap = new Map((insertedSaleItems ?? []).map(i => [i.product_id, i.id]));
 
     // For challan_mode: don't deduct stock or create ledger entries yet
     if (!isChallanMode) {
-      // Deduct only available stock (not backorder qty)
+      // FIFO batch allocation + stock deduction for each item
       for (const item of itemsCalc) {
         const deductQty = Math.min(item.quantity, item.available_qty_at_sale);
-        if (deductQty > 0) {
-          await stockService.deductStock(item.product_id, deductQty, input.dealer_id);
+        if (deductQty <= 0) continue;
+
+        const product = productMap.get(item.product_id);
+        const unitType = (product?.unit_type ?? "piece") as "box_sft" | "piece";
+        const perBoxSft = product?.per_box_sft ?? null;
+        const saleItemId = saleItemMap.get(item.product_id);
+
+        // Try FIFO batch allocation
+        if (saleItemId) {
+          const allocation = await batchService.planFIFOAllocation(
+            item.product_id, input.dealer_id, deductQty, unitType
+          );
+
+          if (allocation.allocations.length > 0) {
+            // Execute batch-level deduction + create sale_item_batches
+            await batchService.executeSaleAllocation(
+              saleItemId, input.dealer_id, allocation.allocations, unitType, perBoxSft
+            );
+
+            // Update allocated_qty on sale_item
+            const totalAllocated = allocation.allocations.reduce((s, a) => s + a.allocated_qty, 0);
+            await supabase.from("sale_items").update({
+              allocated_qty: totalAllocated,
+            } as any).eq("id", saleItemId);
+          }
         }
+
+        // Deduct from aggregate stock (always, regardless of batch availability)
+        await stockService.deductStock(item.product_id, deductQty, input.dealer_id);
       }
 
       await customerLedgerService.addEntry({
@@ -451,7 +537,7 @@ export const salesService = {
     // 1. Fetch existing sale + items for reversal
     const { data: oldSale, error: fetchErr } = await supabase
       .from("sales")
-      .select("*, sale_items(product_id, quantity)")
+      .select("*, sale_items(id, product_id, quantity)")
       .eq("id", saleId)
       .single();
     if (fetchErr || !oldSale) throw new Error("Sale not found");
@@ -460,8 +546,15 @@ export const salesService = {
     const oldCustomerId = oldSale.customer_id;
     const oldPaidAmount = Number(oldSale.paid_amount);
 
-    // 2. Restore old stock
+    // 2. Restore old stock + batch allocations
     for (const item of oldItems) {
+      // Restore batch allocations first
+      const product = await supabase.from("products").select("unit_type, per_box_sft").eq("id", item.product_id).single();
+      const unitType = (product.data?.unit_type ?? "piece") as "box_sft" | "piece";
+      const perBoxSft = product.data?.per_box_sft ?? null;
+      await batchService.restoreBatchAllocations(item.id, unitType, perBoxSft);
+
+      // Then restore aggregate stock
       await stockService.restoreStock(item.product_id, Number(item.quantity), input.dealer_id);
     }
 
@@ -573,11 +666,33 @@ export const salesService = {
       total: item.total,
       total_sft: item.total_sft,
     }));
-    const { error: iErr } = await supabase.from("sale_items").insert(itemRows);
+    const { data: insertedItems, error: iErr } = await supabase
+      .from("sale_items")
+      .insert(itemRows)
+      .select("id, product_id");
     if (iErr) throw new Error(iErr.message);
 
-    // 9. Deduct new stock
+    const saleItemMap = new Map((insertedItems ?? []).map(i => [i.product_id, i.id]));
+
+    // 9. Deduct new stock + batch allocation
     for (const item of input.items) {
+      const product = productMap.get(item.product_id);
+      const unitType = (product?.unit_type ?? "piece") as "box_sft" | "piece";
+      const perBoxSft = product?.per_box_sft ?? null;
+      const saleItemId = saleItemMap.get(item.product_id);
+
+      // FIFO batch allocation
+      if (saleItemId) {
+        const allocation = await batchService.planFIFOAllocation(
+          item.product_id, input.dealer_id, item.quantity, unitType
+        );
+        if (allocation.allocations.length > 0) {
+          await batchService.executeSaleAllocation(
+            saleItemId, input.dealer_id, allocation.allocations, unitType, perBoxSft
+          );
+        }
+      }
+
       await stockService.deductStock(item.product_id, item.quantity, input.dealer_id);
     }
 
@@ -672,7 +787,15 @@ export const salesService = {
 
     const items = (sale as any).sale_items ?? [];
 
-    // 5. Reverse stock effects based on sale type/status
+    // 5. Restore batch allocations for each sale item
+    for (const item of items) {
+      const { data: product } = await supabase.from("products").select("unit_type, per_box_sft").eq("id", item.product_id).single();
+      const unitType = (product?.unit_type ?? "piece") as "box_sft" | "piece";
+      const perBoxSft = product?.per_box_sft ?? null;
+      await batchService.restoreBatchAllocations(item.id, unitType, perBoxSft);
+    }
+
+    // 6. Reverse stock effects based on sale type/status
     if (saleType === "challan_mode" && (saleStatus === "challan_created" || saleStatus === "delivered")) {
       for (const item of items) {
         await stockService.unreserveStock(item.product_id, Number(item.quantity), dealerId);
@@ -687,31 +810,36 @@ export const salesService = {
       }
     }
 
-    // 6. Delete backorder allocations for this sale
+    // 7. Delete backorder allocations for this sale
     const saleItemIds = items.map((i: any) => i.id).filter(Boolean);
     if (saleItemIds.length > 0) {
       await supabase.from("backorder_allocations").delete().in("sale_item_id", saleItemIds);
     }
 
-    // 7. Delete ledger entries for this sale
+    // 8. Delete sale_item_batches (cleanup, should already be done by restoreBatchAllocations)
+    if (saleItemIds.length > 0) {
+      await supabase.from("sale_item_batches").delete().in("sale_item_id", saleItemIds);
+    }
+
+    // 9. Delete ledger entries for this sale
     await supabase.from("customer_ledger").delete().eq("sale_id", saleId).eq("dealer_id", dealerId);
     await supabase.from("cash_ledger").delete().eq("reference_id", saleId).eq("dealer_id", dealerId);
 
-    // 8. Cancel related challans
+    // 10. Cancel related challans
     for (const ch of (challans ?? [])) {
       if ((ch as any).status !== "cancelled") {
         await supabase.from("challans").update({ status: "cancelled" } as any).eq("id", ch.id);
       }
     }
 
-    // 9. Delete sale items
+    // 11. Delete sale items
     await supabase.from("sale_items").delete().eq("sale_id", saleId);
 
-    // 10. Delete sale record
+    // 12. Delete sale record
     const { error: delErr } = await supabase.from("sales").delete().eq("id", saleId);
     if (delErr) throw new Error(delErr.message);
 
-    // 11. Audit log
+    // 13. Audit log
     await logAudit({
       dealer_id: dealerId,
       action: "sale_cancel_delete",
