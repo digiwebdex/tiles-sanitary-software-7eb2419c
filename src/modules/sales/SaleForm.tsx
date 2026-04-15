@@ -55,6 +55,15 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
   const [backorderDialogOpen, setBackorderDialogOpen] = useState(false);
   const [shortageItems, setShortageItems] = useState<StockShortageItem[]>([]);
   const [pendingValues, setPendingValues] = useState<SaleFormValues | null>(null);
+  const [mixedBatchDialogOpen, setMixedBatchDialogOpen] = useState(false);
+  const [mixedBatchInfo, setMixedBatchInfo] = useState<{
+    has_mixed_shade: boolean;
+    has_mixed_caliber: boolean;
+    item_allocations: Array<{
+      product_name: string;
+      allocation: FIFOAllocationResult;
+    }>;
+  } | null>(null);
 
   const form = useForm<SaleFormValues>({
     resolver: zodResolver(saleSchema),
