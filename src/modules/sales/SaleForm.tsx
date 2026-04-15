@@ -283,29 +283,65 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
 
     if (shortages.length > 0) {
       if (!backorderEnabled) {
-        // Strict mode — block the sale
         const msg = shortages.map(s =>
           `${s.product_name}: Available ${s.available} ${s.unit_label}, Requested ${s.requested} ${s.unit_label}`
         ).join("\n");
         throw new Error(`Insufficient stock:\n${msg}\n\nEnable "Allow Sale Below Stock" in dealer settings to create backorder sales.`);
       }
-      // Backorder mode — show confirmation dialog
       setShortageItems(shortages);
       setPendingValues(values);
       setBackorderDialogOpen(true);
       return;
     }
 
-    // No shortage — proceed normally
-    await onSubmit(values);
+    // Check for mixed shade/caliber batches (tiles only)
+    await checkMixedBatchAndSubmit(values);
+  };
+
+  const checkMixedBatchAndSubmit = async (values: SaleFormValues, flags?: { allow_backorder?: boolean }) => {
+    try {
+      const tileItems = values.items.filter(i => {
+        if (!i.product_id || !i.quantity) return false;
+        const p = getProduct(i.product_id);
+        return p?.unit_type === "box_sft";
+      });
+
+      if (tileItems.length > 0) {
+        const preview = await previewBatchAllocation(dealerId, tileItems);
+        if (preview.has_mixed_shade || preview.has_mixed_caliber) {
+          setMixedBatchInfo({
+            has_mixed_shade: preview.has_mixed_shade,
+            has_mixed_caliber: preview.has_mixed_caliber,
+            item_allocations: preview.item_allocations.filter(
+              ia => ia.allocation.has_mixed_shade || ia.allocation.has_mixed_caliber
+            ),
+          });
+          setPendingValues(values);
+          setMixedBatchDialogOpen(true);
+          return;
+        }
+      }
+    } catch {
+      // If batch preview fails, proceed without warning (legacy/unbatched stock)
+    }
+
+    await onSubmit({ ...values, ...flags } as any);
   };
 
   const handleBackorderConfirm = async () => {
     setBackorderDialogOpen(false);
     if (pendingValues) {
-      await onSubmit({ ...pendingValues, allow_backorder: true } as any);
-      setPendingValues(null);
+      await checkMixedBatchAndSubmit(pendingValues, { allow_backorder: true });
       setShortageItems([]);
+    }
+  };
+
+  const handleMixedBatchConfirm = async () => {
+    setMixedBatchDialogOpen(false);
+    if (pendingValues) {
+      await onSubmit({ ...pendingValues, mixed_batch_acknowledged: true } as any);
+      setPendingValues(null);
+      setMixedBatchInfo(null);
     }
   };
 
