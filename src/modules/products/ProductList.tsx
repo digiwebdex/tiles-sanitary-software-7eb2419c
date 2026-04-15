@@ -591,6 +591,21 @@ const ProductList = ({ dealerId }: ProductListProps) => {
           return result;
         }}
       />
+
+      {reserveProduct && (
+        <CreateReservationDialog
+          open={!!reserveProduct}
+          onOpenChange={(open) => { if (!open) setReserveProduct(null); }}
+          product={reserveProduct}
+          dealerId={dealerId}
+        />
+      )}
+
+      <ReservationListDialog
+        open={showReservations}
+        onOpenChange={setShowReservations}
+        dealerId={dealerId}
+      />
     </div>
   );
 };
