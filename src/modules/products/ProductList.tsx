@@ -32,7 +32,10 @@ import UpdateCostPriceDialog from "./UpdateCostPriceDialog";
 import ChangeBarcodeDialog from "./ChangeBarcodeDialog";
 import SetReorderLevelDialog from "./SetReorderLevelDialog";
 import StockSummaryDialog from "./StockSummaryDialog";
+import CreateReservationDialog from "./CreateReservationDialog";
+import ReservationListDialog from "./ReservationListDialog";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useDealerInfo } from "@/hooks/useDealerInfo";
 import { exportToExcel } from "@/lib/exportUtils";
 
 interface ProductListProps {
@@ -43,6 +46,8 @@ const PAGE_SIZE = 25;
 
 const ProductList = ({ dealerId }: ProductListProps) => {
   const permissions = usePermissions();
+  const { data: dealerInfo } = useDealerInfo();
+  const reservationsEnabled = dealerInfo?.enable_reservations ?? false;
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -60,6 +65,8 @@ const ProductList = ({ dealerId }: ProductListProps) => {
   const [barcodeChangeProduct, setBarcodeChangeProduct] = useState<typeof products[0] | null>(null);
   const [reorderProduct, setReorderProduct] = useState<typeof products[0] | null>(null);
   const [stockSummaryProduct, setStockSummaryProduct] = useState<typeof products[0] | null>(null);
+  const [reserveProduct, setReserveProduct] = useState<typeof products[0] | null>(null);
+  const [showReservations, setShowReservations] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
