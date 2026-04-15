@@ -239,7 +239,7 @@ const ProductList = ({ dealerId }: ProductListProps) => {
       return;
     }
     const exportData = products.map((p) => {
-      const si = stockData?.get(p.id) ?? { total: 0, box: 0, sft: 0, piece: 0 };
+      const si = stockData?.get(p.id) ?? { total: 0, box: 0, sft: 0, piece: 0, reservedBox: 0, reservedPiece: 0 };
       const avgCost = costData?.get(p.id) ?? 0;
       return {
         sku: p.sku,
