@@ -1748,6 +1748,7 @@ export type Database = {
           line_total: number
           measurement_snapshot: Json | null
           notes: string | null
+          original_resolved_rate: number | null
           per_box_sft: number | null
           preferred_batch_no: string | null
           preferred_caliber: string | null
@@ -1771,6 +1772,7 @@ export type Database = {
           line_total?: number
           measurement_snapshot?: Json | null
           notes?: string | null
+          original_resolved_rate?: number | null
           per_box_sft?: number | null
           preferred_batch_no?: string | null
           preferred_caliber?: string | null
@@ -1794,6 +1796,7 @@ export type Database = {
           line_total?: number
           measurement_snapshot?: Json | null
           notes?: string | null
+          original_resolved_rate?: number | null
           per_box_sft?: number | null
           preferred_batch_no?: string | null
           preferred_caliber?: string | null
@@ -2062,6 +2065,7 @@ export type Database = {
           dealer_id: string
           fulfillment_status: string
           id: string
+          original_resolved_rate: number | null
           product_id: string
           quantity: number
           rate_source: string
@@ -2078,6 +2082,7 @@ export type Database = {
           dealer_id: string
           fulfillment_status?: string
           id?: string
+          original_resolved_rate?: number | null
           product_id: string
           quantity: number
           rate_source?: string
@@ -2094,6 +2099,7 @@ export type Database = {
           dealer_id?: string
           fulfillment_status?: string
           id?: string
+          original_resolved_rate?: number | null
           product_id?: string
           quantity?: number
           rate_source?: string
