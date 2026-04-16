@@ -114,13 +114,13 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
   });
   const backorderEnabled = (dealerSettings as any)?.allow_backorder === true;
 
-  // Fetch full stock data for shortage checks
+  // Fetch full stock data for shortage checks (includes reserved columns)
   const { data: fullStockData = [] } = useQuery({
     queryKey: ["stock-full-for-sale", dealerId],
     queryFn: async () => {
       const { data } = await supabase
         .from("stock")
-        .select("product_id, average_cost_per_unit, box_qty, piece_qty")
+        .select("product_id, average_cost_per_unit, box_qty, piece_qty, reserved_box_qty, reserved_piece_qty")
         .eq("dealer_id", dealerId);
       return data ?? [];
     },
