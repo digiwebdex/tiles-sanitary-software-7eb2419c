@@ -215,8 +215,8 @@ const QuotationForm = ({ initialQuotation, initialItems }: Props) => {
       </div>
 
       {isLockedForEdit && (
-        <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
-          <CardContent className="text-sm py-3">
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="text-sm py-3 text-foreground">
             This quotation is <strong>{initialQuotation?.status}</strong> and cannot be edited. Use "Revise" from the detail view to change it.
           </CardContent>
         </Card>

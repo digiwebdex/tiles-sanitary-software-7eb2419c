@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pagination } from "@/components/Pagination";
+import Pagination from "@/components/Pagination";
 
 import { useDealerId } from "@/hooks/useDealerId";
 import { quotationService, type QuotationStatus, formatQuotationDisplayNo } from "@/services/quotationService";
@@ -154,9 +154,7 @@ const QuotationList = () => {
         </CardContent>
       </Card>
 
-      {pageCount > 1 && (
-        <Pagination currentPage={page} totalPages={pageCount} onPageChange={setPage} />
-      )}
+      <Pagination page={page} totalItems={total} pageSize={25} onPageChange={setPage} />
 
       {detailId && (
         <QuotationDetailDialog quotationId={detailId} open={!!detailId} onOpenChange={(o) => !o && setDetailId(null)} />
