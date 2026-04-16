@@ -7,6 +7,8 @@ interface Props {
   items: QuotationItem[];
   customer?: { name?: string | null; phone?: string | null; address?: string | null } | null;
   dealerInfo?: { name: string; phone: string | null; address: string | null } | null;
+  /** When true, render compact measurement breakdown for lines that have a snapshot. */
+  showMeasurements?: boolean;
 }
 
 const fmtDate = (d: string) => {
@@ -14,7 +16,10 @@ const fmtDate = (d: string) => {
   return dt ? dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : d;
 };
 
-const QuotationDocument = ({ quotation, items, customer, dealerInfo }: Props) => {
+const QuotationDocument = ({ quotation, items, customer, dealerInfo, showMeasurements = true }: Props) => {
+  const measuredItems = showMeasurements
+    ? items.filter((it) => (it as { measurement_snapshot?: unknown }).measurement_snapshot)
+    : [];
   const businessName = dealerInfo?.name ?? "Your Business Name";
   const customerName = customer?.name ?? quotation.customer_name_text ?? "—";
   const customerPhone = customer?.phone ?? quotation.customer_phone_text ?? null;

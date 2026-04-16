@@ -487,8 +487,20 @@ const QuotationForm = ({ initialQuotation, initialItems }: Props) => {
 
       <AreaCalculatorDialog
         open={calcOpen}
-        onOpenChange={setCalcOpen}
+        onOpenChange={(o) => {
+          setCalcOpen(o);
+          if (!o) setEditingIdx(null);
+        }}
         onInsert={handleAreaInsert}
+        initialSnapshot={
+          editingIdx != null
+            ? ((watchedItems?.[editingIdx] as { measurement_snapshot?: MeasurementSnapshot | null } | undefined)
+                ?.measurement_snapshot ?? null)
+            : null
+        }
+        initialProductId={
+          editingIdx != null ? (watchedItems?.[editingIdx]?.product_id ?? null) : null
+        }
       />
     </div>
   );
