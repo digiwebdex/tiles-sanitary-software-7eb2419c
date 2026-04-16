@@ -30,6 +30,33 @@ export function ApprovalContextSummary({ context, compact }: Props) {
   if (context.discount_amount != null)
     rows.push({ label: "Discount Amount", value: formatCurrency(context.discount_amount) });
 
+  // Pricing-tier override details
+  if (context.original_resolved_rate != null && context.final_rate != null) {
+    rows.push({ label: "Original Resolved Rate", value: formatCurrency(context.original_resolved_rate) });
+    rows.push({ label: "Final Entered Rate", value: formatCurrency(context.final_rate) });
+    const diff = Number(context.final_rate) - Number(context.original_resolved_rate);
+    const diffPct =
+      Number(context.original_resolved_rate) > 0
+        ? (diff / Number(context.original_resolved_rate)) * 100
+        : 0;
+    rows.push({
+      label: "Variance",
+      value: (
+        <span className={diff < 0 ? "text-destructive" : "text-primary"}>
+          {diff >= 0 ? "+" : ""}
+          {formatCurrency(diff)} ({diffPct >= 0 ? "+" : ""}
+          {diffPct.toFixed(2)}%)
+        </span>
+      ),
+    });
+  }
+
+  if (context.rate_source_before)
+    rows.push({ label: "Rate Source (before)", value: String(context.rate_source_before) });
+
+  if (context.tier_name)
+    rows.push({ label: "Tier", value: String(context.tier_name) });
+
   if (context.outstanding != null && context.credit_limit != null)
     rows.push({
       label: "Credit Status",

@@ -333,10 +333,12 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
       form.setValue(`items.${idx}.sale_rate`, resolved.rate);
       form.setValue(`items.${idx}.rate_source`, resolved.source);
       form.setValue(`items.${idx}.tier_id`, resolved.tier_id);
+      form.setValue(`items.${idx}.original_resolved_rate`, resolved.rate);
     } catch {
       form.setValue(`items.${idx}.sale_rate`, product.default_sale_rate);
       form.setValue(`items.${idx}.rate_source`, "default");
       form.setValue(`items.${idx}.tier_id`, null);
+      form.setValue(`items.${idx}.original_resolved_rate`, product.default_sale_rate);
     }
   };
 
@@ -359,13 +361,14 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
         form.setValue(`items.${idx}.sale_rate`, r.rate);
         form.setValue(`items.${idx}.rate_source`, r.source);
         form.setValue(`items.${idx}.tier_id`, r.tier_id);
+        form.setValue(`items.${idx}.original_resolved_rate`, r.rate);
         changedCount += 1;
       });
       if (changedCount > 0 || keptManual > 0) {
         const parts: string[] = [];
-        if (changedCount > 0) parts.push(`Re-priced ${changedCount} line${changedCount === 1 ? "" : "s"}`);
-        if (keptManual > 0) parts.push(`${keptManual} manual rate${keptManual === 1 ? "" : "s"} kept`);
-        toast.message(parts.join(" · "));
+        if (changedCount > 0) parts.push(`Refreshed ${changedCount} line${changedCount === 1 ? "" : "s"}`);
+        if (keptManual > 0) parts.push(`kept ${keptManual} manual-rate line${keptManual === 1 ? "" : "s"} unchanged`);
+        toast.message(parts.join(", "));
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
