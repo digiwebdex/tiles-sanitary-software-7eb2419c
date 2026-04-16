@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Search, Barcode, AlertTriangle, PackageX, Layers } from "lucide-react";
+import { Plus, Trash2, Search, Barcode, AlertTriangle, PackageX, Layers, Lock, CheckCircle } from "lucide-react";
 import { formatCurrency, CURRENCY_CODE } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Separator } from "@/components/ui/separator";
@@ -31,6 +31,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { previewBatchAllocation } from "@/services/salesService";
 import type { FIFOAllocationResult } from "@/services/batchService";
+import { getCustomerProductReservations, type Reservation } from "@/services/reservationService";
+import { useDealerInfo } from "@/hooks/useDealerInfo";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface StockShortageItem {
   product_name: string;
@@ -42,7 +45,7 @@ interface StockShortageItem {
 
 interface SaleFormProps {
   dealerId: string;
-  onSubmit: (values: SaleFormValues & { allow_backorder?: boolean }) => Promise<void>;
+  onSubmit: (values: SaleFormValues & { allow_backorder?: boolean; reservation_selections?: Record<string, Array<{ reservation_id: string; consume_qty: number }>> }) => Promise<void>;
   isLoading?: boolean;
   defaultValues?: Partial<SaleFormValues>;
   submitLabel?: string;
@@ -64,6 +67,12 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
       allocation: FIFOAllocationResult;
     }>;
   } | null>(null);
+  // Reservation selections: product_id → [{ reservation_id, consume_qty }]
+  const [reservationSelections, setReservationSelections] = useState<
+    Record<string, Array<{ reservation_id: string; consume_qty: number }>>
+  >({});
+  const { data: dealerInfo } = useDealerInfo();
+  const reservationsEnabled = dealerInfo?.enable_reservations === true;
 
   const form = useForm<SaleFormValues>({
     resolver: zodResolver(saleSchema),
@@ -114,13 +123,13 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
   });
   const backorderEnabled = (dealerSettings as any)?.allow_backorder === true;
 
-  // Fetch full stock data for shortage checks
+  // Fetch full stock data for shortage checks (includes reserved columns)
   const { data: fullStockData = [] } = useQuery({
     queryKey: ["stock-full-for-sale", dealerId],
     queryFn: async () => {
       const { data } = await supabase
         .from("stock")
-        .select("product_id, average_cost_per_unit, box_qty, piece_qty")
+        .select("product_id, average_cost_per_unit, box_qty, piece_qty, reserved_box_qty, reserved_piece_qty")
         .eq("dealer_id", dealerId);
       return data ?? [];
     },
@@ -177,6 +186,35 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
     enabled: !!matchedCustomer,
   });
 
+  // Fetch active reservations for matched customer (all products)
+  const { data: customerReservations = [] } = useQuery({
+    queryKey: ["sale-customer-reservations", matchedCustomer?.id, dealerId],
+    queryFn: async () => {
+      if (!matchedCustomer) return [];
+      const { data, error } = await supabase
+        .from("stock_reservations")
+        .select(`
+          id, product_id, batch_id, reserved_qty, fulfilled_qty, released_qty, reason, expires_at,
+          product_batches:batch_id (batch_no, shade_code, caliber)
+        `)
+        .eq("customer_id", matchedCustomer.id)
+        .eq("dealer_id", dealerId)
+        .eq("status", "active")
+        .order("created_at", { ascending: true });
+      if (error) return [];
+      return data ?? [];
+    },
+    enabled: !!matchedCustomer && reservationsEnabled,
+  });
+
+  // Group reservations by product_id for easy lookup
+  const reservationsByProduct = new Map<string, typeof customerReservations>();
+  for (const r of customerReservations) {
+    const existing = reservationsByProduct.get(r.product_id) ?? [];
+    existing.push(r);
+    reservationsByProduct.set(r.product_id, existing);
+  }
+
   const stockMap = new Map(fullStockData.map((s) => [s.product_id, Number(s.average_cost_per_unit)]));
 
   const getFilteredProducts = (idx: number) => {
@@ -213,12 +251,15 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
     return null;
   };
 
-  // Get available stock for a product
+  // Get available FREE stock for a product (total - reserved)
   const getAvailableStock = (productId: string): number => {
     const stock = fullStockMap.get(productId);
     if (!stock) return 0;
     const product = getProduct(productId);
-    return product?.unit_type === "box_sft" ? Number(stock.box_qty ?? 0) : Number(stock.piece_qty ?? 0);
+    if (product?.unit_type === "box_sft") {
+      return Number(stock.box_qty ?? 0) - Number((stock as any).reserved_box_qty ?? 0);
+    }
+    return Number(stock.piece_qty ?? 0) - Number((stock as any).reserved_piece_qty ?? 0);
   };
 
   // Check if any item has shortage
@@ -330,7 +371,9 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
       // If batch preview fails, proceed without warning (legacy/unbatched stock)
     }
 
-    await onSubmit({ ...values, ...flags } as any);
+    // Include reservation selections in submit
+    const hasReservations = Object.values(reservationSelections).some(arr => arr.length > 0);
+    await onSubmit({ ...values, ...flags, ...(hasReservations ? { reservation_selections: reservationSelections } : {}) } as any);
   };
 
   const handleBackorderConfirm = async () => {
@@ -344,7 +387,8 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
   const handleMixedBatchConfirm = async () => {
     setMixedBatchDialogOpen(false);
     if (pendingValues) {
-      await onSubmit({ ...pendingValues, mixed_batch_acknowledged: true } as any);
+      const hasReservations = Object.values(reservationSelections).some(arr => arr.length > 0);
+      await onSubmit({ ...pendingValues, mixed_batch_acknowledged: true, ...(hasReservations ? { reservation_selections: reservationSelections } : {}) } as any);
       setPendingValues(null);
       setMixedBatchInfo(null);
     }
@@ -697,6 +741,72 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
                       </span>
                     </div>
                   )}
+
+                  {/* Reservation picker — show when customer has active holds for this product */}
+                  {reservationsEnabled && selectedProduct && watchItems[idx]?.product_id && (() => {
+                    const productReservations = reservationsByProduct.get(watchItems[idx].product_id) ?? [];
+                    if (productReservations.length === 0) return null;
+                    const selectedForProduct = reservationSelections[watchItems[idx].product_id] ?? [];
+                    const selectedIds = new Set(selectedForProduct.map(s => s.reservation_id));
+
+                    return (
+                      <div className="mt-2 ml-2 rounded-md border border-primary/20 bg-primary/5 p-2.5">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <Lock className="h-3.5 w-3.5 text-primary" />
+                          <span className="text-xs font-semibold text-foreground">
+                            Active Reservations for {matchedCustomer?.name}
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          {productReservations.map((res: any) => {
+                            const remaining = Number(res.reserved_qty) - Number(res.fulfilled_qty) - Number(res.released_qty);
+                            if (remaining <= 0) return null;
+                            const isSelected = selectedIds.has(res.id);
+                            const batchInfo = res.product_batches;
+
+                            return (
+                              <label
+                                key={res.id}
+                                className="flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted/50 cursor-pointer"
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => {
+                                    const pid = watchItems[idx].product_id;
+                                    setReservationSelections(prev => {
+                                      const current = [...(prev[pid] ?? [])];
+                                      if (checked) {
+                                        current.push({ reservation_id: res.id, consume_qty: remaining });
+                                      } else {
+                                        const filtered = current.filter(s => s.reservation_id !== res.id);
+                                        return { ...prev, [pid]: filtered };
+                                      }
+                                      return { ...prev, [pid]: current };
+                                    });
+                                  }}
+                                />
+                                <div className="flex-1">
+                                  <span className="font-medium">{remaining} {selectedProduct.unit_type === "box_sft" ? "Box" : "Pcs"}</span>
+                                  {batchInfo && (
+                                    <span className="text-muted-foreground ml-1">
+                                      · Batch: {batchInfo.batch_no}
+                                      {batchInfo.shade_code && ` · Shade: ${batchInfo.shade_code}`}
+                                      {batchInfo.caliber && ` · Cal: ${batchInfo.caliber}`}
+                                    </span>
+                                  )}
+                                  {res.reason && <span className="text-muted-foreground ml-1">· {res.reason}</span>}
+                                </div>
+                                {isSelected && <CheckCircle className="h-3.5 w-3.5 text-primary" />}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          Select reservations to consume with this sale. Unselected holds stay active.
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

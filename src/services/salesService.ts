@@ -7,6 +7,7 @@ import { assertDealerId } from "@/lib/tenancy";
 import { rateLimits } from "@/lib/rateLimit";
 import { notificationService } from "@/services/notificationService";
 import { batchService, type FIFOAllocationResult } from "@/services/batchService";
+import { consumeReservation } from "@/services/reservationService";
 
 export interface SaleItemInput {
   product_id: string;
@@ -32,6 +33,8 @@ export interface CreateSaleInput {
   allow_backorder?: boolean;
   /** If true, user has acknowledged mixed shade/caliber warning */
   mixed_batch_acknowledged?: boolean;
+  /** Explicit reservation selections: { product_id → [{ reservation_id, consume_qty }] } */
+  reservation_selections?: Record<string, Array<{ reservation_id: string; consume_qty: number }>>;
 }
 
 const PAGE_SIZE = 25;
@@ -86,7 +89,7 @@ export async function checkStockAvailability(
 
   const [productsRes, stockRes] = await Promise.all([
     supabase.from("products").select("id, name, unit_type").in("id", productIds),
-    supabase.from("stock").select("product_id, box_qty, piece_qty").eq("dealer_id", dealerId).in("product_id", productIds),
+    supabase.from("stock").select("product_id, box_qty, piece_qty, reserved_box_qty, reserved_piece_qty").eq("dealer_id", dealerId).in("product_id", productIds),
   ]);
 
   const productMap = new Map((productsRes.data ?? []).map(p => [p.id, p]));
@@ -97,9 +100,14 @@ export async function checkStockAvailability(
     const product = productMap.get(item.product_id);
     const stock = stockMap.get(item.product_id);
     const unitType = product?.unit_type ?? "piece";
-    const available = unitType === "box_sft"
+    // Free stock = total - reserved
+    const total = unitType === "box_sft"
       ? Number(stock?.box_qty ?? 0)
       : Number(stock?.piece_qty ?? 0);
+    const reserved = unitType === "box_sft"
+      ? Number((stock as any)?.reserved_box_qty ?? 0)
+      : Number((stock as any)?.reserved_piece_qty ?? 0);
+    const available = total - reserved;
     const shortage = Math.max(0, item.quantity - available);
     if (shortage > 0) hasShortage = true;
 
@@ -238,7 +246,7 @@ export const salesService = {
 
     const [productsRes, stockRes] = await Promise.all([
       supabase.from("products").select("id, unit_type, per_box_sft").in("id", productIds),
-      supabase.from("stock").select("product_id, average_cost_per_unit, box_qty, piece_qty").eq("dealer_id", input.dealer_id).in("product_id", productIds),
+      supabase.from("stock").select("product_id, average_cost_per_unit, box_qty, piece_qty, reserved_box_qty, reserved_piece_qty").eq("dealer_id", input.dealer_id).in("product_id", productIds),
     ]);
 
     if (productsRes.error) throw new Error(productsRes.error.message);
@@ -262,10 +270,14 @@ export const salesService = {
       let itemTotal: number;
       let itemSft: number | null = null;
 
-      // Calculate available qty
-      const availableQty = unitType === "box_sft"
+      // Calculate available qty (FREE stock = total - reserved)
+      const totalQty = unitType === "box_sft"
         ? Number(stock?.box_qty ?? 0)
         : Number(stock?.piece_qty ?? 0);
+      const reservedQty = unitType === "box_sft"
+        ? Number((stock as any)?.reserved_box_qty ?? 0)
+        : Number((stock as any)?.reserved_piece_qty ?? 0);
+      const availableQty = totalQty - reservedQty;
       const shortage = Math.max(0, item.quantity - availableQty);
 
       if (shortage > 0 && !backorderEnabled) {
@@ -381,8 +393,9 @@ export const salesService = {
         const saleItemId = saleItemMap.get(item.product_id);
 
         if (saleItemId) {
+          // Pass customer ID so FIFO respects their reservations
           const allocation = await batchService.planFIFOAllocation(
-            item.product_id, input.dealer_id, deductQty, unitType
+            item.product_id, input.dealer_id, deductQty, unitType, customerId
           );
 
           if (allocation.allocations.length > 0) {
@@ -393,6 +406,14 @@ export const salesService = {
           } else {
             // Legacy/unbatched product: deduct aggregate stock only (atomic RPC)
             await batchService.deductStockUnbatched(item.product_id, input.dealer_id, deductQty, unitType, perBoxSft);
+          }
+
+          // Consume reservations if explicitly selected
+          const reservationSelections = input.reservation_selections?.[item.product_id];
+          if (reservationSelections && reservationSelections.length > 0) {
+            for (const sel of reservationSelections) {
+              await consumeReservation(sel.reservation_id, input.dealer_id, saleItemId, sel.consume_qty);
+            }
           }
         } else {
           // Fallback: deduct aggregate stock
