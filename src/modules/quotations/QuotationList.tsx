@@ -157,6 +157,8 @@ const QuotationList = () => {
                   const customerName = q.customers?.name ?? q.customer_name_text ?? "—";
                   const isDraft = q.status === "draft";
                   const canCancel = ["draft", "active", "expired"].includes(q.status);
+                  const canRevise = q.status === "active" || q.status === "expired";
+                  const canConvert = q.status === "active";
                   return (
                     <tr key={q.id} className="border-t hover:bg-accent/30">
                       <td className="px-3 py-2 font-mono">{formatQuotationDisplayNo(q)}</td>
@@ -173,6 +175,21 @@ const QuotationList = () => {
                           {isDraft && (
                             <Button variant="ghost" size="icon" onClick={() => navigate(`/quotations/${q.id}/edit`)} title="Edit draft">
                               <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canConvert && (
+                            <Button variant="ghost" size="icon" title="Convert to Sale" onClick={() => handleConvert(q.id)}>
+                              <ShoppingCart className="h-4 w-4 text-primary" />
+                            </Button>
+                          )}
+                          {canRevise && (
+                            <Button
+                              variant="ghost" size="icon" title="Revise"
+                              onClick={() => {
+                                if (confirm("Create a new revision of this quote?")) reviseMutation.mutate(q.id);
+                              }}
+                            >
+                              <GitBranch className="h-4 w-4" />
                             </Button>
                           )}
                           {canCancel && (
