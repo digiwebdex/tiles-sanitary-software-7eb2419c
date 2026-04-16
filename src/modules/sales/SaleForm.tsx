@@ -34,6 +34,18 @@ import type { FIFOAllocationResult } from "@/services/batchService";
 import { getCustomerProductReservations, type Reservation } from "@/services/reservationService";
 import { useDealerInfo } from "@/hooks/useDealerInfo";
 import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
+import {
+  getApprovalSettings,
+  isApprovalRequired,
+  createApprovalRequest,
+  findValidApproval,
+  consumeApprovalRequest,
+  generateActionHash,
+  type ApprovalContextData,
+  type ApprovalType,
+} from "@/services/approvalService";
+import { ApprovalRequestDialog } from "@/components/approval/ApprovalRequestDialog";
 
 interface StockShortageItem {
   product_name: string;
