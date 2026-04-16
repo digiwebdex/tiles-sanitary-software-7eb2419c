@@ -67,6 +67,13 @@ import {
   SalesmanQuotationPerformance,
   TopQuotedProductsReport,
 } from "./QuotationReports";
+import {
+  PriceTierListReport,
+  CustomersByTierReport,
+  SalesByTierReport,
+  QuotedValueByTierReport,
+  ManualOverrideFrequencyReport,
+} from "./PricingTierReports";
 import { cn } from "@/lib/utils";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
@@ -76,7 +83,7 @@ import {
   Receipt, CalendarDays, Calendar, CreditCard,
   ShoppingCart, DollarSign, Users, History, BookOpen, Clock, TrendingUp,
   ChevronDown, GitBranch, Shield, Lock, ShieldCheck, FileBarChart, UserCheck,
-  FileSignature,
+  FileSignature, Coins, Pencil,
 } from "lucide-react";
 
 interface ReportsPageContentProps {
@@ -191,6 +198,17 @@ const reportGroups = [
     ],
   },
   {
+    label: "Pricing Tiers",
+    icon: Coins,
+    items: [
+      { key: "tier-list", label: "Price Tier List", icon: Tags },
+      { key: "tier-customers", label: "Customers by Tier", icon: Users },
+      { key: "tier-sales", label: "Sales by Tier", icon: Receipt },
+      { key: "tier-quoted", label: "Quoted Value by Tier", icon: FileSignature },
+      { key: "tier-overrides", label: "Manual Override Frequency", icon: Pencil },
+    ],
+  },
+  {
     label: "Purchases & Expenses",
     icon: ShoppingCart,
     items: [
@@ -260,6 +278,11 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "quotation-expired": return <ExpiredQuotationsReport dealerId={dealerId} />;
       case "quotation-salesman": return <SalesmanQuotationPerformance dealerId={dealerId} />;
       case "quotation-top-products": return <TopQuotedProductsReport dealerId={dealerId} />;
+      case "tier-list": return <PriceTierListReport dealerId={dealerId} />;
+      case "tier-customers": return <CustomersByTierReport dealerId={dealerId} />;
+      case "tier-sales": return <SalesByTierReport dealerId={dealerId} />;
+      case "tier-quoted": return <QuotedValueByTierReport dealerId={dealerId} />;
+      case "tier-overrides": return <ManualOverrideFrequencyReport dealerId={dealerId} />;
       default: return <StockReport dealerId={dealerId} />;
     }
   };
