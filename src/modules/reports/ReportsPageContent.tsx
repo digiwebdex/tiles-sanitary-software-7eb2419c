@@ -48,6 +48,13 @@ import {
   AgingBatchReport,
   BatchMovementReport,
 } from "./BatchReports";
+import {
+  ReservedStockReport,
+  FreeVsReservedReport,
+  ExpiringReservationsReport,
+  CustomerReservedStockReport,
+  BatchReservedStockReport,
+} from "./ReservationReports";
 import { cn } from "@/lib/utils";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
@@ -56,7 +63,7 @@ import {
   BarChart3, Package, Layers, Tags, AlertTriangle,
   Receipt, CalendarDays, Calendar, CreditCard,
   ShoppingCart, DollarSign, Users, History, BookOpen, Clock, TrendingUp,
-  ChevronDown, GitBranch,
+  ChevronDown, GitBranch, Shield, Lock,
 } from "lucide-react";
 
 interface ReportsPageContentProps {
@@ -140,6 +147,17 @@ const reportGroups = [
     ],
   },
   {
+    label: "Stock Reservations",
+    icon: Shield,
+    items: [
+      { key: "reserved-stock", label: "Reserved Stock", icon: Lock },
+      { key: "free-vs-reserved", label: "Free vs Reserved", icon: Shield },
+      { key: "expiring-reservations", label: "Expiring Holds", icon: Clock },
+      { key: "customer-reserved", label: "Customer Reserved", icon: Users },
+      { key: "batch-reserved", label: "Batch Reserved", icon: GitBranch },
+    ],
+  },
+  {
     label: "Purchases & Expenses",
     icon: ShoppingCart,
     items: [
@@ -196,6 +214,11 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "batch-movement": return <BatchMovementReport dealerId={dealerId} />;
       case "mixed-batch-sales": return <MixedBatchSalesReport dealerId={dealerId} />;
       case "batch-aging": return <AgingBatchReport dealerId={dealerId} />;
+      case "reserved-stock": return <ReservedStockReport dealerId={dealerId} />;
+      case "free-vs-reserved": return <FreeVsReservedReport dealerId={dealerId} />;
+      case "expiring-reservations": return <ExpiringReservationsReport dealerId={dealerId} />;
+      case "customer-reserved": return <CustomerReservedStockReport dealerId={dealerId} />;
+      case "batch-reserved": return <BatchReservedStockReport dealerId={dealerId} />;
       default: return <StockReport dealerId={dealerId} />;
     }
   };

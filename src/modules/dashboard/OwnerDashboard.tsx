@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { dashboardService } from "@/services/dashboardService";
 import { backorderAllocationService } from "@/services/backorderAllocationService";
 import { supabase } from "@/integrations/supabase/client";
+import { useDealerInfo } from "@/hooks/useDealerInfo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +26,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useState } from "react";
+import { ReservationDashboardWidgets } from "./ReservationDashboardWidgets";
 
 interface OwnerDashboardProps {
   dealerId: string;
@@ -96,6 +98,7 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
   const permissions = usePermissions();
   const navigate = useNavigate();
   const [latestTab, setLatestTab] = useState("sales");
+  const { data: dealerInfo } = useDealerInfo();
   
   const { data, isLoading, isError } = useQuery({
     queryKey: ["owner-dashboard", dealerId],
@@ -523,6 +526,11 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
           </CardContent>
         </Card>
       </Section>
+
+      {/* Stock Reservations Widgets */}
+      {dealerInfo?.enable_reservations && (
+        <ReservationDashboardWidgets dealerId={dealerId} />
+      )}
 
       {/* Top Overdue Customers Widget */}
       {topOverdue.length > 0 && (
