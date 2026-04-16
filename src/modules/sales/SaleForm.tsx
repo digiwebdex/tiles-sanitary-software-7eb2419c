@@ -333,10 +333,12 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
       form.setValue(`items.${idx}.sale_rate`, resolved.rate);
       form.setValue(`items.${idx}.rate_source`, resolved.source);
       form.setValue(`items.${idx}.tier_id`, resolved.tier_id);
+      form.setValue(`items.${idx}.original_resolved_rate`, resolved.rate);
     } catch {
       form.setValue(`items.${idx}.sale_rate`, product.default_sale_rate);
       form.setValue(`items.${idx}.rate_source`, "default");
       form.setValue(`items.${idx}.tier_id`, null);
+      form.setValue(`items.${idx}.original_resolved_rate`, product.default_sale_rate);
     }
   };
 
@@ -359,13 +361,14 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
         form.setValue(`items.${idx}.sale_rate`, r.rate);
         form.setValue(`items.${idx}.rate_source`, r.source);
         form.setValue(`items.${idx}.tier_id`, r.tier_id);
+        form.setValue(`items.${idx}.original_resolved_rate`, r.rate);
         changedCount += 1;
       });
       if (changedCount > 0 || keptManual > 0) {
         const parts: string[] = [];
-        if (changedCount > 0) parts.push(`Re-priced ${changedCount} line${changedCount === 1 ? "" : "s"}`);
-        if (keptManual > 0) parts.push(`${keptManual} manual rate${keptManual === 1 ? "" : "s"} kept`);
-        toast.message(parts.join(" · "));
+        if (changedCount > 0) parts.push(`Refreshed ${changedCount} line${changedCount === 1 ? "" : "s"}`);
+        if (keptManual > 0) parts.push(`kept ${keptManual} manual-rate line${keptManual === 1 ? "" : "s"} unchanged`);
+        toast.message(parts.join(", "));
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -963,30 +966,48 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
                       <FormField
                         control={form.control}
                         name={`items.${idx}.sale_rate`}
-                        render={({ field: f }) => (
-                          <FormItem className="space-y-0">
-                            <FormControl>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                placeholder="Rate"
-                                className="h-8 text-sm text-right"
-                                disabled={priceLocked}
-                                {...f}
-                                onChange={(e) => {
-                                  f.onChange(e);
-                                  form.setValue(`items.${idx}.rate_source`, "manual");
-                                }}
-                              />
-                            </FormControl>
-                            {watchItems[idx]?.product_id && (
-                              <div className="flex justify-end mt-0.5">
-                                <RateSourceBadge source={watchItems[idx]?.rate_source} className="text-[9px] px-1 py-0 h-4" />
-                              </div>
-                            )}
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                        render={({ field: f }) => {
+                          const item = watchItems[idx];
+                          const orig = item?.original_resolved_rate;
+                          const isManual = item?.rate_source === "manual";
+                          const tier = (allCustomers.find((c) => c.id === matchedCustomer?.id) as { price_tier_id?: string | null } | undefined)?.price_tier_id;
+                          return (
+                            <FormItem className="space-y-0">
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="Rate"
+                                  className={`h-8 text-sm text-right ${isManual ? "border-warning/50 bg-warning/5" : ""}`}
+                                  disabled={priceLocked}
+                                  {...f}
+                                  onChange={(e) => {
+                                    f.onChange(e);
+                                    const newVal = Number(e.target.value);
+                                    const baseline = orig ?? Number(item?.sale_rate ?? 0);
+                                    if (orig == null) {
+                                      form.setValue(`items.${idx}.original_resolved_rate`, baseline);
+                                    }
+                                    if (newVal !== baseline) {
+                                      form.setValue(`items.${idx}.rate_source`, "manual");
+                                    }
+                                  }}
+                                />
+                              </FormControl>
+                              {item?.product_id && (
+                                <div className="flex items-center justify-end gap-1 mt-0.5">
+                                  <RateSourceBadge source={item?.rate_source} className="text-[9px] px-1 py-0 h-4" />
+                                  {isManual && orig != null && Number(orig) !== Number(item?.sale_rate) && (
+                                    <span className="text-[9px] text-muted-foreground" title="Original resolved rate">
+                                      was {formatCurrency(Number(orig))}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          );
+                        }}
                       />
                     </div>
 
