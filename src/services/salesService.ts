@@ -393,8 +393,9 @@ export const salesService = {
         const saleItemId = saleItemMap.get(item.product_id);
 
         if (saleItemId) {
+          // Pass customer ID so FIFO respects their reservations
           const allocation = await batchService.planFIFOAllocation(
-            item.product_id, input.dealer_id, deductQty, unitType
+            item.product_id, input.dealer_id, deductQty, unitType, customerId
           );
 
           if (allocation.allocations.length > 0) {
@@ -405,6 +406,14 @@ export const salesService = {
           } else {
             // Legacy/unbatched product: deduct aggregate stock only (atomic RPC)
             await batchService.deductStockUnbatched(item.product_id, input.dealer_id, deductQty, unitType, perBoxSft);
+          }
+
+          // Consume reservations if explicitly selected
+          const reservationSelections = input.reservation_selections?.[item.product_id];
+          if (reservationSelections && reservationSelections.length > 0) {
+            for (const sel of reservationSelections) {
+              await consumeReservation(sel.reservation_id, input.dealer_id, saleItemId, sel.consume_qty);
+            }
           }
         } else {
           // Fallback: deduct aggregate stock
