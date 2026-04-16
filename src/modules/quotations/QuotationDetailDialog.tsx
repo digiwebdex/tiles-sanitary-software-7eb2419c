@@ -81,6 +81,8 @@ const QuotationDetailDialog = ({ quotationId, open, onOpenChange }: Props) => {
           discount: prefill.discount,
           notes: prefill.notes,
           items: prefill.items,
+          project_id: prefill.project_id,
+          site_id: prefill.site_id,
         },
       });
     } catch (e) {
