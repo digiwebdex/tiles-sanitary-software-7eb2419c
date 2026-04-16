@@ -77,6 +77,7 @@ export interface ApprovalSettings {
   require_sale_cancel_approval: boolean;
   discount_approval_threshold: number;
   auto_approve_for_admins: boolean;
+  approval_expiry_hours: number;
 }
 
 // ── Canonical Hash ─────────────────────────────────────────────────────
@@ -153,10 +154,52 @@ export async function getApprovalSettings(dealerId: string): Promise<ApprovalSet
       require_sale_cancel_approval: true,
       discount_approval_threshold: 10,
       auto_approve_for_admins: true,
+      approval_expiry_hours: 24,
     };
   }
 
-  return data as unknown as ApprovalSettings;
+  const row = data as any;
+  return {
+    ...row,
+    approval_expiry_hours: row.approval_expiry_hours ?? 24,
+  } as ApprovalSettings;
+}
+
+/**
+ * Upsert approval settings for a dealer.
+ */
+export async function saveApprovalSettings(
+  settings: ApprovalSettings
+): Promise<void> {
+  const { error } = await supabase
+    .from("approval_settings")
+    .upsert(settings as any, { onConflict: "dealer_id" });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Cancel a pending approval request.
+ */
+export async function cancelApprovalRequest(
+  requestId: string,
+  reason?: string
+): Promise<void> {
+  const { error } = await supabase.rpc("cancel_approval_request" as any, {
+    _request_id: requestId,
+    _cancel_reason: reason || null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Sweep expired approvals for a dealer (called on view).
+ */
+export async function expireStaleApprovals(dealerId: string): Promise<number> {
+  const { data, error } = await supabase.rpc("expire_stale_approvals" as any, {
+    _dealer_id: dealerId,
+  });
+  if (error) throw new Error(error.message);
+  return (data as number) ?? 0;
 }
 
 /**
