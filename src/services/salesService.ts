@@ -100,9 +100,14 @@ export async function checkStockAvailability(
     const product = productMap.get(item.product_id);
     const stock = stockMap.get(item.product_id);
     const unitType = product?.unit_type ?? "piece";
-    const available = unitType === "box_sft"
+    // Free stock = total - reserved
+    const total = unitType === "box_sft"
       ? Number(stock?.box_qty ?? 0)
       : Number(stock?.piece_qty ?? 0);
+    const reserved = unitType === "box_sft"
+      ? Number((stock as any)?.reserved_box_qty ?? 0)
+      : Number((stock as any)?.reserved_piece_qty ?? 0);
+    const available = total - reserved;
     const shortage = Math.max(0, item.quantity - available);
     if (shortage > 0) hasShortage = true;
 
