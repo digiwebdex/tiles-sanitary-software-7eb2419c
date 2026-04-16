@@ -381,6 +381,80 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
   };
 
   const handleFormSubmit = async (values: SaleFormValues) => {
+    // ── Pre-checks: credit / overdue / discount overrides ───────────────
+    if (approvalSettings) {
+      const subtotalLocal = values.items.reduce((s, item) => {
+        if (!item.product_id || !item.quantity) return s;
+        const p = getProduct(item.product_id);
+        if (p?.unit_type === "box_sft" && p.per_box_sft) {
+          return s + (item.quantity || 0) * p.per_box_sft * (item.sale_rate || 0);
+        }
+        return s + (item.quantity || 0) * (item.sale_rate || 0);
+      }, 0);
+      const totalLocal = subtotalLocal - (values.discount || 0);
+      const discountPct = subtotalLocal > 0 ? ((values.discount || 0) / subtotalLocal) * 100 : 0;
+
+      // Discount override
+      if (isApprovalRequired(approvalSettings, "discount_override", { discount_pct: discountPct })) {
+        const ctx = buildApprovalContext(values, {
+          discount_pct: Math.round(discountPct * 100) / 100,
+          discount_amount: values.discount,
+          sale_total: totalLocal,
+        });
+        const ok = await requestOrAutoApprove("discount_override", ctx);
+        if (!ok) {
+          setApprovalType("discount_override");
+          setApprovalContext(ctx);
+          setApprovalPendingFlags({});
+          setPendingValues(values);
+          setApprovalDialogOpen(true);
+          return;
+        }
+      }
+
+      // Credit limit override
+      if (
+        overdueInfo?.isCreditExceeded &&
+        isApprovalRequired(approvalSettings, "credit_override")
+      ) {
+        const ctx = buildApprovalContext(values, {
+          outstanding: overdueInfo.outstanding,
+          credit_limit: overdueInfo.creditLimit,
+          sale_total: totalLocal,
+        });
+        const ok = await requestOrAutoApprove("credit_override", ctx);
+        if (!ok) {
+          setApprovalType("credit_override");
+          setApprovalContext(ctx);
+          setApprovalPendingFlags({});
+          setPendingValues(values);
+          setApprovalDialogOpen(true);
+          return;
+        }
+      }
+
+      // Overdue override
+      if (
+        overdueInfo?.isOverdueViolated &&
+        isApprovalRequired(approvalSettings, "overdue_override")
+      ) {
+        const ctx = buildApprovalContext(values, {
+          overdue_days: overdueInfo.daysOverdue,
+          outstanding: overdueInfo.outstanding,
+          sale_total: totalLocal,
+        });
+        const ok = await requestOrAutoApprove("overdue_override", ctx);
+        if (!ok) {
+          setApprovalType("overdue_override");
+          setApprovalContext(ctx);
+          setApprovalPendingFlags({});
+          setPendingValues(values);
+          setApprovalDialogOpen(true);
+          return;
+        }
+      }
+    }
+
     // Check for stock shortages
     const shortages: StockShortageItem[] = [];
     for (const item of values.items) {

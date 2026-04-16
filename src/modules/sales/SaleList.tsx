@@ -22,6 +22,13 @@ import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import SaleActionDropdown from "./SaleActionDropdown";
 import { usePermissions } from "@/hooks/usePermissions";
 import { exportToExcel } from "@/lib/exportUtils";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  getApprovalSettings, isApprovalRequired, createApprovalRequest,
+  findValidApproval, consumeApprovalRequest, generateActionHash,
+  type ApprovalContextData,
+} from "@/services/approvalService";
+import { ApprovalRequestDialog } from "@/components/approval/ApprovalRequestDialog";
 
 interface SaleListProps {
   dealerId: string;
@@ -52,13 +59,22 @@ const paymentStatusLabel = (due: number, paid: number) => {
 
 const SaleList = ({ dealerId }: SaleListProps) => {
   const navigate = useNavigate();
+  const { user, isDealerAdmin } = useAuth();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deliverySale, setDeliverySale] = useState<any>(null);
   const [deleteSale, setDeleteSale] = useState<any>(null);
+  const [cancelApprovalOpen, setCancelApprovalOpen] = useState(false);
+  const [cancelApprovalContext, setCancelApprovalContext] = useState<ApprovalContextData>({});
   const permissions = usePermissions();
   const queryClient = useQueryClient();
+
+  const { data: approvalSettings } = useQuery({
+    queryKey: ["approval-settings", dealerId],
+    queryFn: () => getApprovalSettings(dealerId),
+    enabled: !!dealerId,
+  });
 
   const { data: deliveryMap } = useQuery({
     queryKey: ["sales-delivery-check", dealerId],
@@ -90,8 +106,32 @@ const SaleList = ({ dealerId }: SaleListProps) => {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await salesService.cancelSale(id, dealerId);
+    mutationFn: async (sale: any) => {
+      // Sale cancel approval gate
+      if (approvalSettings && isApprovalRequired(approvalSettings, "sale_cancel")) {
+        const ctx: ApprovalContextData = {
+          customer_name: sale.customers?.name,
+          sale_invoice_no: sale.invoice_number,
+          sale_total: Number(sale.total_amount),
+        };
+        const existing = await findValidApproval(dealerId, "sale_cancel", ctx);
+        if (existing) {
+          const hash = await generateActionHash("sale_cancel", ctx);
+          await consumeApprovalRequest(existing.id, hash, sale.id);
+        } else if (isDealerAdmin && approvalSettings.auto_approve_for_admins) {
+          await createApprovalRequest({
+            dealerId, approvalType: "sale_cancel",
+            sourceType: "sale", sourceId: sale.id,
+            requestedBy: user!.id, context: ctx,
+            isAdmin: true, autoApproveForAdmins: true,
+          });
+        } else {
+          setCancelApprovalContext(ctx);
+          setCancelApprovalOpen(true);
+          throw new Error("__APPROVAL_PENDING__");
+        }
+      }
+      await salesService.cancelSale(sale.id, dealerId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
@@ -101,8 +141,26 @@ const SaleList = ({ dealerId }: SaleListProps) => {
       toast.success("Sale cancelled and reversed successfully");
       setDeleteSale(null);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => {
+      if (e.message !== "__APPROVAL_PENDING__") toast.error(e.message);
+    },
   });
+
+  const handleSaleCancelApprovalRequest = async (note: string) => {
+    try {
+      await createApprovalRequest({
+        dealerId, approvalType: "sale_cancel",
+        sourceType: "sale", sourceId: deleteSale?.id,
+        requestedBy: user!.id, reason: note,
+        context: cancelApprovalContext, isAdmin: false,
+      });
+      toast.success("Cancel request submitted. Wait for manager approval.");
+      setCancelApprovalOpen(false);
+      setDeleteSale(null);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
 
   const { data: deliverySaleData } = useQuery({
     queryKey: ["sale-for-delivery", deliverySale?.id],
