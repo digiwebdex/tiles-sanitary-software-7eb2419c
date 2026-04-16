@@ -966,8 +966,24 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
                         render={({ field: f }) => (
                           <FormItem className="space-y-0">
                             <FormControl>
-                              <Input type="number" step="0.01" placeholder="Rate" className="h-8 text-sm text-right" disabled={priceLocked} {...f} />
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="Rate"
+                                className="h-8 text-sm text-right"
+                                disabled={priceLocked}
+                                {...f}
+                                onChange={(e) => {
+                                  f.onChange(e);
+                                  form.setValue(`items.${idx}.rate_source`, "manual");
+                                }}
+                              />
                             </FormControl>
+                            {watchItems[idx]?.product_id && (
+                              <div className="flex justify-end mt-0.5">
+                                <RateSourceBadge source={watchItems[idx]?.rate_source} className="text-[9px] px-1 py-0 h-4" />
+                              </div>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
