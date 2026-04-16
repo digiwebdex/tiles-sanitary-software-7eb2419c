@@ -60,7 +60,7 @@ export const challanService = {
   async getById(id: string) {
     const { data, error } = await supabase
       .from("challans")
-      .select("*, sales(*, customers(name, type, phone, address), sale_items(*, products(name, sku, unit_type, per_box_sft)))")
+      .select("*, sales(*, customers(name, type, phone, address), sale_items(*, products(name, sku, unit_type, per_box_sft))), projects:projects(id, project_name, project_code), project_sites:project_sites(id, site_name, address, contact_person, contact_phone)")
       .eq("id", id)
       .single();
     if (error) throw new Error(error.message);
