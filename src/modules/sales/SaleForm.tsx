@@ -45,7 +45,7 @@ interface StockShortageItem {
 
 interface SaleFormProps {
   dealerId: string;
-  onSubmit: (values: SaleFormValues & { allow_backorder?: boolean }) => Promise<void>;
+  onSubmit: (values: SaleFormValues & { allow_backorder?: boolean; reservation_selections?: Record<string, Array<{ reservation_id: string; consume_qty: number }>> }) => Promise<void>;
   isLoading?: boolean;
   defaultValues?: Partial<SaleFormValues>;
   submitLabel?: string;
