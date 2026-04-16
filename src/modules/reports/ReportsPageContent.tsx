@@ -48,6 +48,13 @@ import {
   AgingBatchReport,
   BatchMovementReport,
 } from "./BatchReports";
+import {
+  ReservedStockReport,
+  FreeVsReservedReport,
+  ExpiringReservationsReport,
+  CustomerReservedStockReport,
+  BatchReservedStockReport,
+} from "./ReservationReports";
 import { cn } from "@/lib/utils";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
@@ -56,7 +63,7 @@ import {
   BarChart3, Package, Layers, Tags, AlertTriangle,
   Receipt, CalendarDays, Calendar, CreditCard,
   ShoppingCart, DollarSign, Users, History, BookOpen, Clock, TrendingUp,
-  ChevronDown, GitBranch,
+  ChevronDown, GitBranch, Shield, Lock,
 } from "lucide-react";
 
 interface ReportsPageContentProps {
@@ -137,6 +144,17 @@ const reportGroups = [
       { key: "batch-movement", label: "Batch Movement", icon: GitBranch },
       { key: "mixed-batch-sales", label: "Mixed Batch Sales", icon: AlertTriangle },
       { key: "batch-aging", label: "Batch Aging", icon: Clock },
+    ],
+  },
+  {
+    label: "Stock Reservations",
+    icon: Shield,
+    items: [
+      { key: "reserved-stock", label: "Reserved Stock", icon: Lock },
+      { key: "free-vs-reserved", label: "Free vs Reserved", icon: Shield },
+      { key: "expiring-reservations", label: "Expiring Holds", icon: Clock },
+      { key: "customer-reserved", label: "Customer Reserved", icon: Users },
+      { key: "batch-reserved", label: "Batch Reserved", icon: GitBranch },
     ],
   },
   {
