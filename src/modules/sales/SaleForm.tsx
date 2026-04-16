@@ -328,6 +328,58 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
     }
   };
 
+  // Helper: build approval context for the current sale
+  const buildApprovalContext = (
+    values: SaleFormValues,
+    extra?: Partial<ApprovalContextData>
+  ): ApprovalContextData => ({
+    customer_id: matchedCustomer?.id,
+    customer_name: values.customer_name,
+    items: values.items
+      .filter((i) => i.product_id && i.quantity)
+      .map((i) => ({
+        product_id: i.product_id!,
+        product_name: getProduct(i.product_id!)?.name,
+        quantity: i.quantity!,
+        sale_rate: i.sale_rate,
+      })),
+    ...extra,
+  });
+
+  // Helper: request or auto-approve
+  const requestOrAutoApprove = async (
+    type: ApprovalType,
+    context: ApprovalContextData,
+    reason?: string
+  ): Promise<boolean> => {
+    // Check if there's already a valid approved request
+    const existing = await findValidApproval(dealerId, type, context);
+    if (existing) {
+      // Consume it
+      const hash = await generateActionHash(type, context);
+      await consumeApprovalRequest(existing.id, hash);
+      return true; // can proceed
+    }
+
+    // Auto-approve for admins
+    if (isDealerAdmin && approvalSettings?.auto_approve_for_admins) {
+      await createApprovalRequest({
+        dealerId,
+        approvalType: type,
+        sourceType: "sale_draft",
+        requestedBy: user!.id,
+        reason,
+        context,
+        isAdmin: true,
+        autoApproveForAdmins: true,
+      });
+      return true;
+    }
+
+    // Salesman needs to request
+    return false;
+  };
+
   const handleFormSubmit = async (values: SaleFormValues) => {
     // Check for stock shortages
     const shortages: StockShortageItem[] = [];
@@ -354,6 +406,24 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
         ).join("\n");
         throw new Error(`Insufficient stock:\n${msg}\n\nEnable "Allow Sale Below Stock" in dealer settings to create backorder sales.`);
       }
+
+      // Check if backorder approval is required
+      if (approvalSettings && isApprovalRequired(approvalSettings, "backorder_sale")) {
+        const totalShortage = shortages.reduce((s, i) => s + i.shortage, 0);
+        const ctx = buildApprovalContext(values, { shortage_qty: totalShortage });
+        const canProceed = await requestOrAutoApprove("backorder_sale", ctx);
+        if (!canProceed) {
+          // Show approval request dialog
+          setApprovalType("backorder_sale");
+          setApprovalContext(ctx);
+          setApprovalPendingFlags({ allow_backorder: true });
+          setPendingValues(values);
+          setApprovalDialogOpen(true);
+          return;
+        }
+      }
+
+      // If no approval needed or auto-approved, show confirm dialog
       setShortageItems(shortages);
       setPendingValues(values);
       setBackorderDialogOpen(true);
@@ -380,6 +450,36 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
         }));
         const preview = await previewBatchAllocation(dealerId, validItems);
         if (preview.has_mixed_shade || preview.has_mixed_caliber) {
+          // Check if approval is required for mixed shade/caliber
+          const needsShadeApproval = preview.has_mixed_shade && approvalSettings && isApprovalRequired(approvalSettings, "mixed_shade");
+          const needsCaliberApproval = preview.has_mixed_caliber && approvalSettings && isApprovalRequired(approvalSettings, "mixed_caliber");
+
+          if (needsShadeApproval || needsCaliberApproval) {
+            const type: ApprovalType = needsShadeApproval ? "mixed_shade" : "mixed_caliber";
+            const shades = preview.item_allocations
+              .filter(ia => ia.allocation.has_mixed_shade)
+              .flatMap(ia => ia.allocation.allocations.map(a => a.shade_code).filter(Boolean) as string[]);
+            const calibers = preview.item_allocations
+              .filter(ia => ia.allocation.has_mixed_caliber)
+              .flatMap(ia => ia.allocation.allocations.map(a => a.caliber).filter(Boolean) as string[]);
+
+            const ctx = buildApprovalContext(values, {
+              mixed_shades: [...new Set(shades)],
+              mixed_calibers: [...new Set(calibers)],
+            });
+
+            const canProceed = await requestOrAutoApprove(type, ctx);
+            if (!canProceed) {
+              setApprovalType(type);
+              setApprovalContext(ctx);
+              setApprovalPendingFlags({ ...flags, mixed_batch_acknowledged: true });
+              setPendingValues(values);
+              setApprovalDialogOpen(true);
+              return;
+            }
+          }
+
+          // Show warning dialog (non-blocking or already approved)
           setMixedBatchInfo({
             has_mixed_shade: preview.has_mixed_shade,
             has_mixed_caliber: preview.has_mixed_caliber,
@@ -416,6 +516,25 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
       await onSubmit({ ...pendingValues, mixed_batch_acknowledged: true, ...(hasReservations ? { reservation_selections: reservationSelections } : {}) } as any);
       setPendingValues(null);
       setMixedBatchInfo(null);
+    }
+  };
+
+  const handleApprovalRequest = async (reason: string) => {
+    try {
+      await createApprovalRequest({
+        dealerId,
+        approvalType: approvalType,
+        sourceType: "sale_draft",
+        requestedBy: user!.id,
+        reason,
+        context: approvalContext,
+        isAdmin: false,
+      });
+      toast.success("Approval request submitted. Please wait for manager approval before proceeding.");
+      setApprovalDialogOpen(false);
+      setPendingValues(null);
+    } catch (e: any) {
+      toast.error(e.message);
     }
   };
 
