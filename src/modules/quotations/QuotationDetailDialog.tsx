@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { quotationService, formatQuotationDisplayNo } from "@/services/quotationService";
+import { projectService } from "@/services/projectService";
 import { useDealerInfo } from "@/hooks/useDealerInfo";
 import { useDealerId } from "@/hooks/useDealerId";
 import QuotationDocument from "@/components/quotation/QuotationDocument";
@@ -263,6 +264,8 @@ const QuotationDetailDialog = ({ quotationId, open, onOpenChange }: Props) => {
               items={items}
               customer={quotation.customers ?? undefined}
               dealerInfo={dealerInfo ?? undefined}
+              project={projectSite?.project ?? null}
+              site={projectSite?.site ?? null}
             />
           )}
         </div>
