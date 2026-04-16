@@ -29,6 +29,7 @@ import { useState } from "react";
 import { ReservationDashboardWidgets } from "./ReservationDashboardWidgets";
 import { ApprovalDashboardWidgets } from "@/components/approval/ApprovalDashboardWidgets";
 import { QuotationDashboardWidgets } from "@/components/quotation/QuotationDashboardWidgets";
+import { PricingTierDashboardWidgets } from "@/components/PricingTierDashboardWidgets";
 
 interface OwnerDashboardProps {
   dealerId: string;
@@ -539,6 +540,9 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
 
       {/* Quotation Pipeline Widgets */}
       <QuotationDashboardWidgets dealerId={dealerId} />
+
+      {/* Pricing Tiers Widgets */}
+      <PricingTierDashboardWidgets dealerId={dealerId} />
 
       {/* Top Overdue Customers Widget */}
       {topOverdue.length > 0 && (
