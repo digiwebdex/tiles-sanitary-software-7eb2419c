@@ -245,12 +245,17 @@ export async function createApprovalRequest(params: {
   context: ApprovalContextData;
   isAdmin?: boolean;
   autoApproveForAdmins?: boolean;
+  expiryHours?: number;
 }): Promise<ApprovalRequest> {
   const actionHash = await generateActionHash(params.approvalType, params.context);
 
   // Auto-approve for admins if setting enabled
   const shouldAutoApprove = params.isAdmin && (params.autoApproveForAdmins ?? true);
   const status = shouldAutoApprove ? "auto_approved" : "pending";
+
+  // Compute expires_at honoring dealer setting (default 24h)
+  const hours = Math.max(1, Math.min(720, params.expiryHours ?? 24));
+  const expiresAt = new Date(Date.now() + hours * 3600 * 1000).toISOString();
 
   const row = {
     dealer_id: params.dealerId,
@@ -266,6 +271,7 @@ export async function createApprovalRequest(params: {
     decided_at: shouldAutoApprove ? new Date().toISOString() : null,
     consumed_at: shouldAutoApprove ? new Date().toISOString() : null,
     consumed_by: shouldAutoApprove ? params.requestedBy : null,
+    expires_at: expiresAt,
   };
 
   const { data, error } = await supabase
