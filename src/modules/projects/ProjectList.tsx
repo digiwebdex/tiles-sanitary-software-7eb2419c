@@ -46,10 +46,10 @@ export default function ProjectList() {
 
   const customersQ = useQuery({
     queryKey: ["customers-filter", dealerId],
-    queryFn: () => customerService.list(dealerId),
+    queryFn: () => customerService.list(dealerId, "", "", 1),
     enabled: !!dealerId,
   });
-  const customers = customersQ.data ?? [];
+  const customers = customersQ.data?.data ?? [];
 
   const projectsQ = useQuery({
     queryKey: ["projects", dealerId, search, statusFilter, customerFilter],
