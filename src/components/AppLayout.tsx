@@ -45,7 +45,12 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
       <aside className="hidden md:flex w-56 flex-col border-r bg-card p-4 gap-1">
-        <h2 className="text-lg font-bold text-foreground mb-4 px-2">ERP</h2>
+        <div className="flex items-center justify-between mb-4 px-2">
+          <h2 className="text-lg font-bold text-foreground">ERP</h2>
+          {isDealerAdmin && dealerIdForBadge && (
+            <PendingApprovalsBadge dealerId={dealerIdForBadge} onClick={() => navigate("/approvals")} />
+          )}
+        </div>
 
         {isGrace && (
           <Badge variant="outline" className="mb-3 text-yellow-600 border-yellow-400 justify-center text-xs">
