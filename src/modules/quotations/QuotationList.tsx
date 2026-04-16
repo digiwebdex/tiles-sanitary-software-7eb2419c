@@ -45,8 +45,50 @@ const QuotationList = () => {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const reviseMutation = useMutation({
+    mutationFn: (id: string) => quotationService.revise(id, dealerId),
+    onSuccess: (newId) => {
+      toast.success("Revision created");
+      qc.invalidateQueries({ queryKey: ["quotations"] });
+      navigate(`/quotations/${newId}/edit`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const handleConvert = async (id: string) => {
+    try {
+      const prefill = await quotationService.prepareConversionPrefill(id, dealerId);
+      if (prefill.blockers.length > 0) {
+        toast.error(prefill.blockers[0], {
+          description: prefill.blockers.length > 1 ? `+${prefill.blockers.length - 1} more` : undefined,
+        });
+        return;
+      }
+      navigate("/sales/new", {
+        state: {
+          quotation_id: id,
+          customer_name: prefill.customer_name,
+          discount: prefill.discount,
+          notes: prefill.notes,
+          items: prefill.items,
+        },
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  // Listen to revision-history "view" clicks from the detail dialog
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.id) setDetailId(detail.id);
+    };
+    window.addEventListener("open-quotation-detail", handler);
+    return () => window.removeEventListener("open-quotation-detail", handler);
+  }, []);
+
   const total = data?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / 25));
 
   return (
     <div className="space-y-4">
