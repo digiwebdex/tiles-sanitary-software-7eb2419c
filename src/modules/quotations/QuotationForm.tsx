@@ -446,6 +446,12 @@ const QuotationForm = ({ initialQuotation, initialItems }: Props) => {
           </div>
         </CardContent>
       </Card>
+
+      <AreaCalculatorDialog
+        open={calcOpen}
+        onOpenChange={setCalcOpen}
+        onInsert={handleAreaInsert}
+      />
     </div>
   );
 };
