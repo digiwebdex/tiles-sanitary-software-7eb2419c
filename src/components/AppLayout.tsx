@@ -8,6 +8,8 @@ import {
   Undo2, MapPin, Zap, Gift, Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDealerId } from "@/hooks/useDealerId";
+import { PendingApprovalsBadge } from "@/components/approval/PendingApprovalsBadge";
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, readonlyAllowed: true },
@@ -23,6 +25,7 @@ const navItems = [
   { path: "/purchase-returns", label: "Purchase Returns", icon: Undo2 },
   { path: "/ledger", label: "Ledger", icon: BookOpen },
   { path: "/collections", label: "Payments", icon: Wallet },
+  { path: "/approvals", label: "Approvals", icon: ShieldCheck },
   { path: "/campaigns", label: "Campaigns", icon: Gift },
   { path: "/reports", label: "Reports", icon: BarChart3, readonlyAllowed: true },
   { path: "/reports/credit", label: "Credit Report", icon: ShieldCheck, readonlyAllowed: true },
@@ -30,9 +33,10 @@ const navItems = [
 ];
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
-  const { profile, accessLevel, isSuperAdmin, signOut } = useAuth();
+  const { profile, accessLevel, isSuperAdmin, isDealerAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const dealerIdForBadge = profile?.dealer_id ?? "";
 
   const isReadonly = accessLevel === "readonly";
   const isGrace = accessLevel === "grace";
@@ -41,7 +45,12 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
       <aside className="hidden md:flex w-56 flex-col border-r bg-card p-4 gap-1">
-        <h2 className="text-lg font-bold text-foreground mb-4 px-2">ERP</h2>
+        <div className="flex items-center justify-between mb-4 px-2">
+          <h2 className="text-lg font-bold text-foreground">ERP</h2>
+          {isDealerAdmin && dealerIdForBadge && (
+            <PendingApprovalsBadge dealerId={dealerIdForBadge} onClick={() => navigate("/approvals")} />
+          )}
+        </div>
 
         {isGrace && (
           <Badge variant="outline" className="mb-3 text-yellow-600 border-yellow-400 justify-center text-xs">

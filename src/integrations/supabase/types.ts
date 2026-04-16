@@ -14,6 +14,130 @@ export type Database = {
   }
   public: {
     Tables: {
+      approval_requests: {
+        Row: {
+          action_hash: string
+          approval_type: Database["public"]["Enums"]["approval_type"]
+          consumed_at: string | null
+          consumed_by: string | null
+          consumed_source_id: string | null
+          context_data: Json
+          created_at: string
+          dealer_id: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          expires_at: string | null
+          id: string
+          reason: string | null
+          requested_by: string
+          source_id: string | null
+          source_type: string
+          status: string
+        }
+        Insert: {
+          action_hash: string
+          approval_type: Database["public"]["Enums"]["approval_type"]
+          consumed_at?: string | null
+          consumed_by?: string | null
+          consumed_source_id?: string | null
+          context_data?: Json
+          created_at?: string
+          dealer_id: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          expires_at?: string | null
+          id?: string
+          reason?: string | null
+          requested_by: string
+          source_id?: string | null
+          source_type: string
+          status?: string
+        }
+        Update: {
+          action_hash?: string
+          approval_type?: Database["public"]["Enums"]["approval_type"]
+          consumed_at?: string | null
+          consumed_by?: string | null
+          consumed_source_id?: string | null
+          context_data?: Json
+          created_at?: string
+          dealer_id?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          expires_at?: string | null
+          id?: string
+          reason?: string | null
+          requested_by?: string
+          source_id?: string | null
+          source_type?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approval_requests_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "dealers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      approval_settings: {
+        Row: {
+          auto_approve_for_admins: boolean
+          created_at: string
+          dealer_id: string
+          discount_approval_threshold: number
+          require_backorder_approval: boolean
+          require_credit_override_approval: boolean
+          require_mixed_caliber_approval: boolean
+          require_mixed_shade_approval: boolean
+          require_overdue_override_approval: boolean
+          require_sale_cancel_approval: boolean
+          require_stock_adjustment_approval: boolean
+          updated_at: string
+        }
+        Insert: {
+          auto_approve_for_admins?: boolean
+          created_at?: string
+          dealer_id: string
+          discount_approval_threshold?: number
+          require_backorder_approval?: boolean
+          require_credit_override_approval?: boolean
+          require_mixed_caliber_approval?: boolean
+          require_mixed_shade_approval?: boolean
+          require_overdue_override_approval?: boolean
+          require_sale_cancel_approval?: boolean
+          require_stock_adjustment_approval?: boolean
+          updated_at?: string
+        }
+        Update: {
+          auto_approve_for_admins?: boolean
+          created_at?: string
+          dealer_id?: string
+          discount_approval_threshold?: number
+          require_backorder_approval?: boolean
+          require_credit_override_approval?: boolean
+          require_mixed_caliber_approval?: boolean
+          require_mixed_shade_approval?: boolean
+          require_overdue_override_approval?: boolean
+          require_sale_cancel_approval?: boolean
+          require_stock_adjustment_approval?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approval_settings_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: true
+            referencedRelation: "dealers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -2319,6 +2443,10 @@ export type Database = {
         Returns: undefined
       }
       check_account_locked: { Args: { _email: string }; Returns: Json }
+      consume_approval_request: {
+        Args: { _action_hash: string; _request_id: string; _source_id?: string }
+        Returns: string
+      }
       consume_reservation_for_sale: {
         Args: {
           _consume_qty: number
@@ -2339,6 +2467,14 @@ export type Database = {
           _qty: number
           _reason?: string
           _unit_type: string
+        }
+        Returns: string
+      }
+      decide_approval_request: {
+        Args: {
+          _decision: string
+          _decision_note?: string
+          _request_id: string
         }
         Returns: string
       }
@@ -2404,6 +2540,16 @@ export type Database = {
     }
     Enums: {
       app_role: "super_admin" | "dealer_admin" | "salesman"
+      approval_type:
+        | "backorder_sale"
+        | "mixed_shade"
+        | "mixed_caliber"
+        | "credit_override"
+        | "overdue_override"
+        | "discount_override"
+        | "stock_adjustment"
+        | "sale_cancel"
+        | "reservation_release"
       customer_type: "retailer" | "customer" | "project"
       ledger_entry_type:
         | "sale"
@@ -2548,6 +2694,17 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["super_admin", "dealer_admin", "salesman"],
+      approval_type: [
+        "backorder_sale",
+        "mixed_shade",
+        "mixed_caliber",
+        "credit_override",
+        "overdue_override",
+        "discount_override",
+        "stock_adjustment",
+        "sale_cancel",
+        "reservation_release",
+      ],
       customer_type: ["retailer", "customer", "project"],
       ledger_entry_type: [
         "sale",

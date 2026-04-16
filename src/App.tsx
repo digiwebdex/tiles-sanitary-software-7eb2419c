@@ -45,6 +45,7 @@ import DeliveriesPage from "./pages/deliveries/DeliveriesPage";
 import POSSalePage from "./pages/sales/POSSalePage";
 import CampaignsPage from "./pages/campaigns/CampaignsPage";
 import CollectionsPage from "./pages/collections/CollectionsPage";
+import ApprovalsPage from "./pages/approvals/ApprovalsPage";
 
 // Super Admin
 import SuperAdminLayout from "./pages/super-admin/SuperAdminLayout";
@@ -145,6 +146,7 @@ const App = () => (
             <Route path="/ledger" element={<ProtectedRoute><AppLayout><LedgerPage /></AppLayout></ProtectedRoute>} />
             <Route path="/campaigns" element={<ProtectedRoute><AppLayout><CampaignsPage /></AppLayout></ProtectedRoute>} />
             <Route path="/collections" element={<ProtectedRoute><AppLayout><CollectionsPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/approvals" element={<ProtectedRoute><AppLayout><ApprovalsPage /></AppLayout></ProtectedRoute>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
