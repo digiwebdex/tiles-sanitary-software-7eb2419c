@@ -527,6 +527,11 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
         </Card>
       </Section>
 
+      {/* Stock Reservations Widgets */}
+      {dealerInfo?.enable_reservations && (
+        <ReservationDashboardWidgets dealerId={dealerId} />
+      )}
+
       {/* Top Overdue Customers Widget */}
       {topOverdue.length > 0 && (
         <Card className="border-destructive/30">
