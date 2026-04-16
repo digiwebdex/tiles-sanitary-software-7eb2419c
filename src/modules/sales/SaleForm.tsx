@@ -443,10 +443,36 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
 
       // Discount override
       if (isApprovalRequired(approvalSettings, "discount_override", { discount_pct: discountPct })) {
+        // Find biggest manual override line (if any) to enrich approval context
+        let manualLine: typeof values.items[number] | null = null;
+        let maxVariance = 0;
+        for (const it of values.items) {
+          if (it.rate_source !== "manual" || it.original_resolved_rate == null || !it.product_id) continue;
+          const variance = Math.abs(Number(it.sale_rate) - Number(it.original_resolved_rate)) * Number(it.quantity || 0);
+          if (variance > maxVariance) { maxVariance = variance; manualLine = it; }
+        }
+        const tierName = customerTierId
+          ? (await pricingTierService.getTier(customerTierId).catch(() => null))?.name ?? null
+          : null;
+        const overrideExtras: Partial<ApprovalContextData> = manualLine
+          ? {
+              original_resolved_rate: Number(manualLine.original_resolved_rate),
+              final_rate: Number(manualLine.sale_rate),
+              rate_source_before: manualLine.tier_id ? "tier" : "default",
+              tier_name: tierName,
+              variance_amount: Number(manualLine.sale_rate) - Number(manualLine.original_resolved_rate),
+              variance_pct: Number(manualLine.original_resolved_rate) > 0
+                ? Math.round(((Number(manualLine.sale_rate) - Number(manualLine.original_resolved_rate)) / Number(manualLine.original_resolved_rate)) * 10000) / 100
+                : 0,
+              override_product_id: manualLine.product_id,
+              override_product_name: getProduct(manualLine.product_id)?.name,
+            }
+          : {};
         const ctx = buildApprovalContext(values, {
           discount_pct: Math.round(discountPct * 100) / 100,
           discount_amount: values.discount,
           sale_total: totalLocal,
+          ...overrideExtras,
         });
         const ok = await requestOrAutoApprove("discount_override", ctx);
         if (!ok) {
