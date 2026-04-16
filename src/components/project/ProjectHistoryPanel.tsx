@@ -202,7 +202,7 @@ export function ProjectHistoryPanel({ dealerId, projectId }: Props) {
           </h5>
           <div className="rounded-md border divide-y">
             {challans.slice(0, 10).map((c: any) => (
-              <div key={c.id} className="flex items-center justify-between px-3 py-1.5 text-xs">
+              <div key={c.id} className="flex items-center justify-between px-3 py-1.5 text-xs hover:bg-muted/50 cursor-pointer" onClick={() => navigate("/challans")}>
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-mono text-foreground">{c.challan_no}</span>
                   <span className="text-muted-foreground">·</span>
@@ -228,7 +228,7 @@ export function ProjectHistoryPanel({ dealerId, projectId }: Props) {
           </h5>
           <div className="rounded-md border divide-y">
             {deliveries.slice(0, 10).map((d: any) => (
-              <div key={d.id} className="flex items-center justify-between px-3 py-1.5 text-xs">
+              <div key={d.id} className="flex items-center justify-between px-3 py-1.5 text-xs hover:bg-muted/50 cursor-pointer" onClick={() => navigate("/deliveries")}>
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-mono text-foreground">{d.delivery_no ?? "—"}</span>
                   <span className="text-muted-foreground">·</span>
