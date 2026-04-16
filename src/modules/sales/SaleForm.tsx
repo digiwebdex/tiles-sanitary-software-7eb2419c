@@ -31,6 +31,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { previewBatchAllocation } from "@/services/salesService";
 import type { FIFOAllocationResult } from "@/services/batchService";
+import { getCustomerProductReservations, type Reservation } from "@/services/reservationService";
+import { useDealerInfo } from "@/hooks/useDealerInfo";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface StockShortageItem {
   product_name: string;
