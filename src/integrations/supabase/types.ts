@@ -87,6 +87,7 @@ export type Database = {
       }
       approval_settings: {
         Row: {
+          approval_expiry_hours: number
           auto_approve_for_admins: boolean
           created_at: string
           dealer_id: string
@@ -101,6 +102,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          approval_expiry_hours?: number
           auto_approve_for_admins?: boolean
           created_at?: string
           dealer_id: string
@@ -115,6 +117,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          approval_expiry_hours?: number
           auto_approve_for_admins?: boolean
           created_at?: string
           dealer_id?: string
@@ -2442,6 +2445,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      cancel_approval_request: {
+        Args: { _cancel_reason?: string; _request_id: string }
+        Returns: string
+      }
       check_account_locked: { Args: { _email: string }; Returns: Json }
       consume_approval_request: {
         Args: { _action_hash: string; _request_id: string; _source_id?: string }
@@ -2492,6 +2499,7 @@ export type Database = {
         Args: { _dealer_id: string; _delivery_id: string }
         Returns: undefined
       }
+      expire_stale_approvals: { Args: { _dealer_id: string }; Returns: number }
       expire_stale_reservations: {
         Args: { _dealer_id: string }
         Returns: number
