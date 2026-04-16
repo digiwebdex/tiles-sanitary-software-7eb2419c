@@ -186,6 +186,35 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
     enabled: !!matchedCustomer,
   });
 
+  // Fetch active reservations for matched customer (all products)
+  const { data: customerReservations = [] } = useQuery({
+    queryKey: ["sale-customer-reservations", matchedCustomer?.id, dealerId],
+    queryFn: async () => {
+      if (!matchedCustomer) return [];
+      const { data, error } = await supabase
+        .from("stock_reservations")
+        .select(`
+          id, product_id, batch_id, reserved_qty, fulfilled_qty, released_qty, reason, expires_at,
+          product_batches:batch_id (batch_no, shade_code, caliber)
+        `)
+        .eq("customer_id", matchedCustomer.id)
+        .eq("dealer_id", dealerId)
+        .eq("status", "active")
+        .order("created_at", { ascending: true });
+      if (error) return [];
+      return data ?? [];
+    },
+    enabled: !!matchedCustomer && reservationsEnabled,
+  });
+
+  // Group reservations by product_id for easy lookup
+  const reservationsByProduct = new Map<string, typeof customerReservations>();
+  for (const r of customerReservations) {
+    const existing = reservationsByProduct.get(r.product_id) ?? [];
+    existing.push(r);
+    reservationsByProduct.set(r.product_id, existing);
+  }
+
   const stockMap = new Map(fullStockData.map((s) => [s.product_id, Number(s.average_cost_per_unit)]));
 
   const getFilteredProducts = (idx: number) => {
