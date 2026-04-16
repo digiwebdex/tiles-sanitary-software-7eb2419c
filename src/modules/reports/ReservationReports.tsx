@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/utils";
-import { exportToExcel, type ExportColumn } from "@/lib/exportUtils";
+import { exportToExcel } from "@/lib/exportUtils";
 import { Button } from "@/components/ui/button";
 import { Download, Lock, ShieldCheck, Clock, Users } from "lucide-react";
 
