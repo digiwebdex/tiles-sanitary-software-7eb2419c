@@ -74,6 +74,13 @@ import {
   QuotedValueByTierReport,
   ManualOverrideFrequencyReport,
 } from "./PricingTierReports";
+import {
+  SalesByProjectReport,
+  OutstandingByProjectReport,
+  DeliveryHistoryBySiteReport,
+  ProjectQuotationPipelineReport,
+  TopActiveProjectsReport,
+} from "./ProjectReports";
 import { cn } from "@/lib/utils";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
@@ -83,7 +90,7 @@ import {
   Receipt, CalendarDays, Calendar, CreditCard,
   ShoppingCart, DollarSign, Users, History, BookOpen, Clock, TrendingUp,
   ChevronDown, GitBranch, Shield, Lock, ShieldCheck, FileBarChart, UserCheck,
-  FileSignature, Coins, Pencil,
+  FileSignature, Coins, Pencil, Folder, MapPin,
 } from "lucide-react";
 
 interface ReportsPageContentProps {
@@ -209,6 +216,17 @@ const reportGroups = [
     ],
   },
   {
+    label: "Projects & Sites",
+    icon: Folder,
+    items: [
+      { key: "project-sales", label: "Sales by Project", icon: Receipt },
+      { key: "project-outstanding", label: "Outstanding by Project", icon: Folder },
+      { key: "site-delivery-history", label: "Delivery History by Site", icon: MapPin },
+      { key: "project-quote-pipeline", label: "Project Quote Pipeline", icon: FileSignature },
+      { key: "project-top-active", label: "Top Active Projects", icon: TrendingUp },
+    ],
+  },
+  {
     label: "Purchases & Expenses",
     icon: ShoppingCart,
     items: [
@@ -283,6 +301,11 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "tier-sales": return <SalesByTierReport dealerId={dealerId} />;
       case "tier-quoted": return <QuotedValueByTierReport dealerId={dealerId} />;
       case "tier-overrides": return <ManualOverrideFrequencyReport dealerId={dealerId} />;
+      case "project-sales": return <SalesByProjectReport dealerId={dealerId} />;
+      case "project-outstanding": return <OutstandingByProjectReport dealerId={dealerId} />;
+      case "site-delivery-history": return <DeliveryHistoryBySiteReport dealerId={dealerId} />;
+      case "project-quote-pipeline": return <ProjectQuotationPipelineReport dealerId={dealerId} />;
+      case "project-top-active": return <TopActiveProjectsReport dealerId={dealerId} />;
       default: return <StockReport dealerId={dealerId} />;
     }
   };
