@@ -86,6 +86,19 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
   const { data: dealerInfo } = useDealerInfo();
   const reservationsEnabled = dealerInfo?.enable_reservations === true;
 
+  // Approval workflow state
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [approvalType, setApprovalType] = useState<ApprovalType>("backorder_sale");
+  const [approvalContext, setApprovalContext] = useState<ApprovalContextData>({});
+  const [approvalPendingFlags, setApprovalPendingFlags] = useState<Record<string, any>>({});
+
+  // Fetch approval settings
+  const { data: approvalSettings } = useQuery({
+    queryKey: ["approval-settings", dealerId],
+    queryFn: () => getApprovalSettings(dealerId),
+    enabled: !!dealerId,
+  });
+
   const form = useForm<SaleFormValues>({
     resolver: zodResolver(saleSchema),
     defaultValues: {
