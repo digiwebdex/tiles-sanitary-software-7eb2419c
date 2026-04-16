@@ -457,7 +457,19 @@ const QuotationForm = ({ initialQuotation, initialItems }: Props) => {
                           />
                         </td>
                         <td className="py-2 px-2">
-                          <Input type="number" step="0.01" {...form.register(`items.${idx}.rate`)} />
+                          <Input
+                            type="number"
+                            step="0.01"
+                            {...form.register(`items.${idx}.rate`, {
+                              onChange: () => {
+                                const cur = form.getValues(`items.${idx}.rate_source`);
+                                if (cur !== "manual") form.setValue(`items.${idx}.rate_source`, "manual");
+                              },
+                            })}
+                          />
+                          <div className="mt-1">
+                            <RateSourceBadge source={(it as { rate_source?: string })?.rate_source ?? "default"} />
+                          </div>
                         </td>
                         <td className="py-2 px-2">
                           <Input type="number" step="0.01" {...form.register(`items.${idx}.discount_value`)} />
