@@ -33,13 +33,18 @@ async function generateDeliveryNo(dealerId: string): Promise<string> {
 }
 
 export const deliveryService = {
-  async list(dealerId: string, page = 1, statusFilter?: string) {
+  async list(
+    dealerId: string,
+    page = 1,
+    statusFilter?: string,
+    opts: { projectId?: string | null; siteId?: string | null } = {},
+  ) {
     const from = (page - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
     let query = supabase
       .from("deliveries")
-      .select("*, challans(challan_no), sales(invoice_number, customers(name, phone, address)), delivery_items(id, quantity, products(name, unit_type))", { count: "exact" })
+      .select("*, challans(challan_no), sales(invoice_number, customers(name, phone, address)), projects:projects(id, project_name, project_code), project_sites:project_sites(id, site_name, address), delivery_items(id, quantity, products(name, unit_type))", { count: "exact" })
       .eq("dealer_id", dealerId)
       .order("delivery_date", { ascending: false })
       .range(from, to);
@@ -47,6 +52,8 @@ export const deliveryService = {
     if (statusFilter && statusFilter !== "all") {
       query = query.eq("status", statusFilter);
     }
+    if (opts.projectId) query = query.eq("project_id", opts.projectId);
+    if (opts.siteId) query = query.eq("site_id", opts.siteId);
 
     const { data, error, count } = await query;
     if (error) throw new Error(error.message);
@@ -58,6 +65,39 @@ export const deliveryService = {
 
     const deliveryNo = await generateDeliveryNo(input.dealer_id);
 
+    // Inherit project/site from sale (preferred) or challan
+    let projectId: string | null = null;
+    let siteId: string | null = null;
+    if (input.sale_id) {
+      const { data: s } = await supabase
+        .from("sales")
+        .select("project_id, site_id")
+        .eq("id", input.sale_id)
+        .maybeSingle();
+      projectId = (s as any)?.project_id ?? null;
+      siteId = (s as any)?.site_id ?? null;
+    }
+    if (!projectId && input.challan_id) {
+      const { data: c } = await supabase
+        .from("challans")
+        .select("project_id, site_id")
+        .eq("id", input.challan_id)
+        .maybeSingle();
+      projectId = (c as any)?.project_id ?? null;
+      siteId = (c as any)?.site_id ?? null;
+    }
+
+    // If a site is linked but no explicit delivery_address provided, prefer site address
+    let resolvedAddress = input.delivery_address || null;
+    if (!resolvedAddress && siteId) {
+      const { data: site } = await supabase
+        .from("project_sites")
+        .select("address")
+        .eq("id", siteId)
+        .maybeSingle();
+      resolvedAddress = (site as any)?.address ?? null;
+    }
+
     const { data, error } = await supabase
       .from("deliveries")
       .insert({
@@ -68,10 +108,12 @@ export const deliveryService = {
         status: "pending",
         receiver_name: input.receiver_name || null,
         receiver_phone: input.receiver_phone || null,
-        delivery_address: input.delivery_address || null,
+        delivery_address: resolvedAddress,
         notes: input.notes || null,
         created_by: input.created_by || null,
         delivery_no: deliveryNo,
+        project_id: projectId,
+        site_id: siteId,
       } as any)
       .select()
       .single();
@@ -142,7 +184,7 @@ export const deliveryService = {
   async getById(id: string, dealerId: string) {
     const { data, error } = await supabase
       .from("deliveries")
-      .select("*, challans(challan_no), delivery_items(*, products(name, sku, unit_type, per_box_sft)), sales(invoice_number, sale_items(*, products(name, sku, unit_type, per_box_sft)), customers(name, phone, address))")
+      .select("*, challans(challan_no), delivery_items(*, products(name, sku, unit_type, per_box_sft)), sales(invoice_number, sale_items(*, products(name, sku, unit_type, per_box_sft)), customers(name, phone, address)), projects:projects(id, project_name, project_code), project_sites:project_sites(id, site_name, address, contact_person, contact_phone)")
       .eq("id", id)
       .eq("dealer_id", dealerId)
       .single();
