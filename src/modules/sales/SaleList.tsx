@@ -124,6 +124,7 @@ const SaleList = ({ dealerId }: SaleListProps) => {
             sourceType: "sale", sourceId: sale.id,
             requestedBy: user!.id, context: ctx,
             isAdmin: true, autoApproveForAdmins: true,
+            expiryHours: approvalSettings.approval_expiry_hours,
           });
         } else {
           setCancelApprovalContext(ctx);
@@ -153,6 +154,7 @@ const SaleList = ({ dealerId }: SaleListProps) => {
         sourceType: "sale", sourceId: deleteSale?.id,
         requestedBy: user!.id, reason: note,
         context: cancelApprovalContext, isAdmin: false,
+        expiryHours: approvalSettings?.approval_expiry_hours,
       });
       toast.success("Cancel request submitted. Wait for manager approval.");
       setCancelApprovalOpen(false);

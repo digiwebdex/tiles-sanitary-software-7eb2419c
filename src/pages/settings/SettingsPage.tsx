@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/contexts/AuthContext";
 import { useDealerId } from "@/hooks/useDealerId";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Settings, AlertTriangle, Package, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
+import { ApprovalSettingsCard } from "@/components/approval/ApprovalSettingsCard";
 
 const SettingsPage = () => {
   const { isDealerAdmin } = usePermissions();
@@ -144,6 +144,9 @@ const SettingsPage = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Approval Workflow */}
+          <ApprovalSettingsCard />
         </>
       )}
     </div>

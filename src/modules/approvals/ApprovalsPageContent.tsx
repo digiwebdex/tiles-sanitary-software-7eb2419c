@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDealerId } from "@/hooks/useDealerId";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   listApprovals,
+  expireStaleApprovals,
   APPROVAL_TYPE_LABELS,
   APPROVAL_STATUS_LABELS,
   type ApprovalRequest,
@@ -11,6 +12,7 @@ import {
   type ApprovalType,
 } from "@/services/approvalService";
 import { ApprovalDecisionDialog } from "@/components/approval/ApprovalDecisionDialog";
+import { ApprovalDetailDialog } from "@/components/approval/ApprovalDetailDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,6 +68,16 @@ const ApprovalsPageContent = () => {
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedRequest, setSelectedRequest] = useState<ApprovalRequest | null>(null);
+
+  // Sweep expired approvals on page open (non-blocking)
+  useEffect(() => {
+    if (!dealerId) return;
+    expireStaleApprovals(dealerId)
+      .then((n) => {
+        if (n > 0) queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      })
+      .catch(() => {});
+  }, [dealerId, queryClient]);
 
   const { data: approvals = [], isLoading } = useQuery({
     queryKey: ["approvals", dealerId, statusFilter, typeFilter],
@@ -229,6 +241,16 @@ const ApprovalsPageContent = () => {
         onClose={() => setSelectedRequest(null)}
         request={selectedRequest}
         onDecided={handleDecided}
+      />
+
+      <ApprovalDetailDialog
+        open={
+          !!selectedRequest &&
+          !(selectedRequest.status === "pending" && isDealerAdmin)
+        }
+        onClose={() => setSelectedRequest(null)}
+        request={selectedRequest}
+        onChanged={handleDecided}
       />
     </div>
   );

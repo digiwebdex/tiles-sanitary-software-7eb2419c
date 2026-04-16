@@ -372,6 +372,7 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
         context,
         isAdmin: true,
         autoApproveForAdmins: true,
+        expiryHours: approvalSettings?.approval_expiry_hours,
       });
       return true;
     }
@@ -603,6 +604,7 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
         reason,
         context: approvalContext,
         isAdmin: false,
+        expiryHours: approvalSettings?.approval_expiry_hours,
       });
       toast.success("Approval request submitted. Please wait for manager approval before proceeding.");
       setApprovalDialogOpen(false);

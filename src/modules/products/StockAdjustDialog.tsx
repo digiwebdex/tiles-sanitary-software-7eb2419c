@@ -85,6 +85,7 @@ const StockAdjustDialog = ({ open, onOpenChange, product, dealerId, onSuccess }:
             sourceType: "stock_adjustment", requestedBy: user!.id,
             reason: reason.trim(), context: ctx, isAdmin: true,
             autoApproveForAdmins: true,
+            expiryHours: settings.approval_expiry_hours,
           });
         } else {
           setApprovalContext(ctx);
@@ -111,6 +112,7 @@ const StockAdjustDialog = ({ open, onOpenChange, product, dealerId, onSuccess }:
         dealerId, approvalType: "stock_adjustment",
         sourceType: "stock_adjustment", requestedBy: user!.id,
         reason: note || reason.trim(), context: approvalContext, isAdmin: false,
+        expiryHours: settings?.approval_expiry_hours,
       });
       toast.success("Approval request submitted. Wait for manager approval.");
       setApprovalDialogOpen(false);
