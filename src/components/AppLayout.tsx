@@ -33,8 +33,11 @@ const navItems = [
 ];
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
-  const { profile, accessLevel, isSuperAdmin, signOut } = useAuth();
+  const { profile, accessLevel, isSuperAdmin, isDealerAdmin, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  let dealerIdForBadge = "";
+  try { dealerIdForBadge = useDealerId(); } catch { /* super admin without dealer */ }
   const location = useLocation();
 
   const isReadonly = accessLevel === "readonly";
