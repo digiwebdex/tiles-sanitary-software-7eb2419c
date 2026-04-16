@@ -98,6 +98,7 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
   const permissions = usePermissions();
   const navigate = useNavigate();
   const [latestTab, setLatestTab] = useState("sales");
+  const { data: dealerInfo } = useDealerInfo();
   
   const { data, isLoading, isError } = useQuery({
     queryKey: ["owner-dashboard", dealerId],
