@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/utils";
-import { exportToExcel } from "@/lib/exportUtils";
+import { exportToExcel, type ExportColumn } from "@/lib/exportUtils";
 import { Button } from "@/components/ui/button";
 import { Download, Lock, ShieldCheck, Clock, Users } from "lucide-react";
 
@@ -69,7 +69,12 @@ export function ReservedStockReport({ dealerId }: { dealerId: string }) {
             All active reservations • {rows.length} holds • {totalReserved} units • Est. {formatCurrency(totalValue)}
           </p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => exportToExcel(rows, "reserved-stock-report")}>
+        <Button size="sm" variant="outline" onClick={() => exportToExcel(rows, [
+          { key: "product", header: "Product" }, { key: "sku", header: "SKU" },
+          { key: "customer", header: "Customer" }, { key: "batch", header: "Batch" },
+          { key: "remaining", header: "Remaining" }, { key: "estimatedValue", header: "Est. Value" },
+          { key: "expiresAt", header: "Expires" },
+        ], "reserved-stock-report")}>
           <Download className="h-3.5 w-3.5 mr-1" /> Export
         </Button>
       </CardHeader>
@@ -153,7 +158,11 @@ export function FreeVsReservedReport({ dealerId }: { dealerId: string }) {
           </CardTitle>
           <p className="text-xs text-muted-foreground mt-1">{data.length} products with stock</p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => exportToExcel(exportRows, "free-vs-reserved-report")}>
+        <Button size="sm" variant="outline" onClick={() => exportToExcel(exportRows, [
+          { key: "Product", header: "Product" }, { key: "SKU", header: "SKU" },
+          { key: "Unit", header: "Unit" }, { key: "Total", header: "Total" },
+          { key: "Reserved", header: "Reserved" }, { key: "Free", header: "Free" },
+        ], "free-vs-reserved-report")}>
           <Download className="h-3.5 w-3.5 mr-1" /> Export
         </Button>
       </CardHeader>
