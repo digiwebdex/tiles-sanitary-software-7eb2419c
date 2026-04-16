@@ -69,6 +69,16 @@ const ApprovalsPageContent = () => {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedRequest, setSelectedRequest] = useState<ApprovalRequest | null>(null);
 
+  // Sweep expired approvals on page open (non-blocking)
+  useEffect(() => {
+    if (!dealerId) return;
+    expireStaleApprovals(dealerId)
+      .then((n) => {
+        if (n > 0) queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      })
+      .catch(() => {});
+  }, [dealerId, queryClient]);
+
   const { data: approvals = [], isLoading } = useQuery({
     queryKey: ["approvals", dealerId, statusFilter, typeFilter],
     queryFn: () =>
