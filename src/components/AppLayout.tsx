@@ -8,6 +8,8 @@ import {
   Undo2, MapPin, Zap, Gift, Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDealerId } from "@/hooks/useDealerId";
+import { PendingApprovalsBadge } from "@/components/approval/PendingApprovalsBadge";
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, readonlyAllowed: true },
