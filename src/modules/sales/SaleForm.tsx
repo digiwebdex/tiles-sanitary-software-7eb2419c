@@ -1187,6 +1187,19 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Approval Request Dialog */}
+      <ApprovalRequestDialog
+        open={approvalDialogOpen}
+        onClose={() => {
+          setApprovalDialogOpen(false);
+          setPendingValues(null);
+        }}
+        onRequestApproval={handleApprovalRequest}
+        approvalType={approvalType}
+        context={approvalContext}
+        isLoading={isLoading}
+      />
     </>
   );
 };
