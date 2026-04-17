@@ -70,7 +70,7 @@ export function SupplierPerformancePanel({ dealerId, supplierId }: Props) {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <Metric
             icon={<ShoppingCart className="h-3.5 w-3.5" />}
@@ -85,9 +85,20 @@ export function SupplierPerformancePanel({ dealerId, supplierId }: Props) {
           />
           <Metric
             icon={<Clock className="h-3.5 w-3.5" />}
-            label="Avg Gap"
+            label="Avg Cadence"
             value={data.avg_days_between_purchases !== null ? `${data.avg_days_between_purchases}d` : "—"}
-            sub={data.last_purchase_date ? `Last: ${data.last_purchase_date}` : "No purchases"}
+            sub={
+              data.last_gap_days !== null
+                ? `Last gap: ${data.last_gap_days}d · Longest: ${data.longest_gap_days}d`
+                : data.last_purchase_date ? `Last: ${data.last_purchase_date}` : "No purchases"
+            }
+          />
+          <Metric
+            icon={<Clock className="h-3.5 w-3.5" />}
+            label="On-Time / Delayed"
+            value={`${data.on_time_count} / ${data.delayed_count}`}
+            sub={data.on_time_count + data.delayed_count > 0 ? `${data.delayed_pct}% delayed` : "Need 2+ purchases"}
+            danger={data.delayed_pct > 30}
           />
           <Metric
             icon={<AlertTriangle className="h-3.5 w-3.5" />}
@@ -100,6 +111,7 @@ export function SupplierPerformancePanel({ dealerId, supplierId }: Props) {
             icon={<Wallet className="h-3.5 w-3.5" />}
             label="Outstanding"
             value={formatCurrency(data.outstanding_amount)}
+            sub={data.recent_purchase_value_30d > 0 ? `30d spend: ${formatCurrency(data.recent_purchase_value_30d)}` : undefined}
             danger={data.outstanding_amount > data.avg_purchase_value * 5 && data.avg_purchase_value > 0}
           />
           <Metric
@@ -109,6 +121,16 @@ export function SupplierPerformancePanel({ dealerId, supplierId }: Props) {
             danger={(data.days_since_last_purchase ?? 0) > 90}
           />
         </div>
+        {data.score_factors.length > 0 ? (
+          <div className="rounded-md border border-dashed bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Score factors:</span>{" "}
+            {data.score_factors.join(" · ")}
+          </div>
+        ) : (
+          <div className="rounded-md border border-dashed bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
+            Clean record — no penalties applied to score.
+          </div>
+        )}
       </CardContent>
     </Card>
   );
