@@ -522,9 +522,127 @@ function groupBy(
   );
 }
 
+/**
+ * Demand grouped by Project / Site (and customer).
+ *
+ * Aggregates *open shortages* (sale_items.backorder_qty - allocated_qty) for
+ * sales that are linked to a project. This is the practical project-driven
+ * demand signal — it reflects what the dealer has *promised* to a project
+ * and not yet covered.
+ *
+ * READ-ONLY. Advisory only. No purchase or stock side effects.
+ */
+async function getProjectDemandRows(dealerId: string): Promise<ProjectDemandRow[]> {
+  // Pull open backorder rows joined to their parent sale and (optional) project/site.
+  const { data, error } = await supabase
+    .from("sale_items")
+    .select(`
+      product_id, backorder_qty, allocated_qty,
+      sales!inner (
+        id, dealer_id, created_at, project_id, site_id, customer_id,
+        customers ( name ),
+        projects:project_id ( id, project_name ),
+        project_sites:site_id ( id, site_name )
+      )
+    `)
+    .eq("dealer_id", dealerId)
+    .gt("backorder_qty", 0);
+  if (error) return [];
+
+  type Agg = {
+    project_id: string;
+    project_name: string;
+    site_id: string | null;
+    site_name: string | null;
+    customer_id: string | null;
+    customer_name: string | null;
+    products: Set<string>;
+    open_shortage: number;
+    oldest: string | null;
+  };
+  const map = new Map<string, Agg>();
+
+  type RowShape = {
+    product_id: string;
+    backorder_qty: number | string;
+    allocated_qty: number | string;
+    sales: {
+      created_at: string;
+      project_id: string | null;
+      site_id: string | null;
+      customer_id: string | null;
+      customers: { name: string | null } | null;
+      projects: { id: string; project_name: string } | null;
+      project_sites: { id: string; site_name: string } | null;
+    } | null;
+  };
+
+  for (const row of (data ?? []) as unknown as RowShape[]) {
+    const open = Math.max(
+      0,
+      Number(row.backorder_qty ?? 0) - Number(row.allocated_qty ?? 0),
+    );
+    if (open <= 0) continue;
+    const s = row.sales;
+    if (!s || !s.project_id || !s.projects) continue; // project-linked only
+
+    const key = `${s.project_id}::${s.site_id ?? "_"}`;
+    const cur = map.get(key) ?? {
+      project_id: s.project_id,
+      project_name: s.projects.project_name,
+      site_id: s.site_id ?? null,
+      site_name: s.project_sites?.site_name ?? null,
+      customer_id: s.customer_id ?? null,
+      customer_name: s.customers?.name ?? null,
+      products: new Set<string>(),
+      open_shortage: 0,
+      oldest: null as string | null,
+    };
+    cur.products.add(row.product_id);
+    cur.open_shortage += open;
+    if (!cur.oldest || s.created_at < cur.oldest) cur.oldest = s.created_at;
+    map.set(key, cur);
+  }
+
+  if (map.size === 0) return [];
+
+  // Compute incoming for the union of products to estimate uncovered gap per row.
+  const allProductIds = Array.from(
+    new Set(Array.from(map.values()).flatMap((a) => Array.from(a.products))),
+  );
+  const settings = await getSettings(dealerId);
+  const incomingMap = await loadIncomingMap(dealerId, allProductIds, settings.incoming_window_days);
+
+  return Array.from(map.values())
+    .map((a) => {
+      const incoming = Array.from(a.products).reduce(
+        (sum, pid) => sum + (incomingMap.get(pid) ?? 0),
+        0,
+      );
+      return {
+        project_id: a.project_id,
+        project_name: a.project_name,
+        site_id: a.site_id,
+        site_name: a.site_name,
+        customer_id: a.customer_id,
+        customer_name: a.customer_name,
+        product_count: a.products.size,
+        open_shortage_total: a.open_shortage,
+        incoming_total: incoming,
+        uncovered_gap: Math.max(0, a.open_shortage - incoming),
+        oldest_shortage_date: a.oldest,
+        days_waiting: daysBetween(a.oldest),
+      };
+    })
+    .sort((x, y) => y.open_shortage_total - x.open_shortage_total);
+}
+
 async function getDashboardStats(dealerId: string): Promise<DemandStats> {
-  const rows = await getDemandRows(dealerId);
-  const products = await loadProducts(dealerId);
+  const [rows, products, projectRows] = await Promise.all([
+    getDemandRows(dealerId),
+    loadProducts(dealerId),
+    getProjectDemandRows(dealerId),
+  ]);
   const costMap = new Map(products.map((p) => [p.id, p.cost_price]));
 
   let deadValue = 0;
@@ -562,6 +680,24 @@ async function getDashboardStats(dealerId: string): Promise<DemandStats> {
       .slice(0, n)
       .map(([key, count]) => ({ key, count }));
 
+  // Roll up project-level shortages keyed by project (sites collapsed).
+  const projectAgg = new Map<string, { name: string; open: number; days: number }>();
+  for (const r of projectRows) {
+    const cur = projectAgg.get(r.project_id) ?? { name: r.project_name, open: 0, days: 0 };
+    cur.open += r.open_shortage_total;
+    cur.days = Math.max(cur.days, r.days_waiting ?? 0);
+    projectAgg.set(r.project_id, cur);
+  }
+  const topWaitingProjects = Array.from(projectAgg.entries())
+    .map(([project_id, v]) => ({
+      project_id,
+      project_name: v.name,
+      open_shortage: v.open,
+      days_waiting: v.days,
+    }))
+    .sort((a, b) => b.open_shortage - a.open_shortage)
+    .slice(0, 5);
+
   return {
     reorderNeededCount: reorder,
     lowStockCount: low,
@@ -574,12 +710,14 @@ async function getDashboardStats(dealerId: string): Promise<DemandStats> {
     uncoveredGapCount: gap,
     topCategoriesAtRisk: topN(byCategory),
     topBrandsAtRisk: topN(byBrand),
+    topWaitingProjects,
   };
 }
 
 export const demandPlanningService = {
   getDemandRows,
   getDashboardStats,
+  getProjectDemandRows,
   filter(rows: DemandRow[], flag: DemandFlag): DemandRow[] {
     return rows.filter((r) => r.flags.includes(flag));
   },
