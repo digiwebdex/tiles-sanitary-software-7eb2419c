@@ -322,6 +322,7 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "project-top-active": return <TopActiveProjectsReport dealerId={dealerId} />;
       case "purchase-need": return <PurchaseNeedByProductReport dealerId={dealerId} />;
       case "purchase-customer-demand": return <CustomerSiteDemandReport dealerId={dealerId} />;
+      case "purchase-project-site": return <ProjectSiteShortageReport dealerId={dealerId} />;
       default: return <StockReport dealerId={dealerId} />;
     }
   };
