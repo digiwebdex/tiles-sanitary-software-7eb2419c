@@ -4,8 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { formatCurrency } from "@/lib/utils";
 import { backorderAllocationService, FULFILLMENT_STATUS_LABELS, FULFILLMENT_STATUS_COLORS } from "@/services/backorderAllocationService";
+import { deliveryService } from "@/services/deliveryService";
+import { FulfillmentBadge } from "@/components/FulfillmentBadge";
 
 interface ReportProps {
   dealerId: string;
