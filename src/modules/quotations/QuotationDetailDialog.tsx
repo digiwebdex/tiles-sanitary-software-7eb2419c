@@ -36,6 +36,7 @@ const QuotationDetailDialog = ({ quotationId, open, onOpenChange }: Props) => {
   const dealerId = useDealerId();
   const qc = useQueryClient();
   const { data: dealerInfo } = useDealerInfo();
+  const [waOpen, setWaOpen] = useState(false);
 
   const { data: quotation } = useQuery({
     queryKey: ["quotation", quotationId],
@@ -176,6 +177,14 @@ const QuotationDetailDialog = ({ quotationId, open, onOpenChange }: Props) => {
                 <ShoppingCart className="h-4 w-4 mr-1" /> Convert to Sale
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setWaOpen(true)}
+              disabled={!quotation}
+            >
+              <MessageCircle className="h-4 w-4 mr-1" /> WhatsApp
+            </Button>
             <Button variant="outline" size="sm" onClick={handlePrint} disabled={!quotation}>
               <Printer className="h-4 w-4 mr-1" /> Print
             </Button>
