@@ -1,22 +1,27 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Supplier Performance Tracking — Batch 1 + Batch 2
+ * Supplier Performance Tracking — Batch 1 + Batch 2 + Batch 3
  *
  * Purely DERIVED from existing tables:
  *   - purchases             → frequency, recency, spend, cadence
+ *   - purchase_items        → unit price trend (Batch 3)
  *   - purchase_returns      → return rate (reliability signal)
  *   - supplier_ledger       → outstanding exposure
  *
- * No schema changes. No side effects. Read-only analytics.
+ * No stock/ledger side effects. Read-only analytics.
  *
- * Lead-time note (Batch 2 clarification):
+ * Lead-time note (Batch 2):
  *   The ERP does not capture a separate "order placed" date.
  *   We approximate "supply cadence" as the average gap between
- *   consecutive purchases. We then derive on-time vs delayed by comparing
- *   each gap against the supplier's own median cadence × 1.5 (tolerance).
- *   This is a practical reliability signal for tiles/sanitary dealers
- *   without inventing data we don't have.
+ *   consecutive purchases. A gap is delayed when it exceeds the
+ *   supplier's median cadence × 1.5 (with a 7-day floor).
+ *
+ * Price trend (Batch 3):
+ *   For each (supplier, product) we compare the last unit rate against
+ *   the average of the previous (up to 3) rates. A supplier's overall
+ *   trend is the volume-weighted direction across products with ≥ 2
+ *   purchases. Bands: stable (< 3% drift), rising, falling.
  *
  * Score (0-100), explainable:
  *   start at 100, then:
@@ -25,9 +30,14 @@ import { supabase } from "@/integrations/supabase/client";
  *     - subtract 10 points if outstanding > 5x avg purchase value
  *     - subtract 10 points if delayed_pct > 30
  *   floor at 0.
+ *
+ *   Price trend is shown to the owner but NOT included in the score —
+ *   pricing decisions are subjective (better caliber, exchange rate,
+ *   negotiated terms). Keeping the score deterministic.
  */
 
 export type ReliabilityBand = "reliable" | "average" | "at_risk" | "inactive";
+export type PriceTrend = "stable" | "rising" | "falling" | "insufficient_data";
 
 export interface SupplierPerformance {
   supplier_id: string;
@@ -57,10 +67,15 @@ export interface SupplierPerformance {
   outstanding_amount: number;
   recent_purchase_value_30d: number;
 
+  // price trend (Batch 3)
+  price_trend: PriceTrend;
+  price_change_pct: number; // signed; positive = rising
+  trend_products_compared: number;
+
   // derived
   reliability_score: number; // 0-100
   reliability_band: ReliabilityBand;
-  score_factors: string[]; // explainable list of penalties applied
+  score_factors: string[];
 }
 
 interface ListOptions {
@@ -113,12 +128,85 @@ function median(nums: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
+interface PurchaseItemRow {
+  purchase_id: string;
+  product_id: string;
+  purchase_rate: number;
+  quantity: number;
+}
+
+/**
+ * Compute price trend per supplier using purchase_items joined to purchases.
+ * For each (supplier, product) with ≥2 historical rates:
+ *   - last rate vs avg of previous (up to 3) rates
+ *   - direction: rising (>+3%), falling (<-3%), stable
+ * Aggregate across products by total quantity weight.
+ */
+function computePriceTrends(
+  purchases: { id: string; supplier_id: string | null; purchase_date: string }[],
+  items: PurchaseItemRow[],
+): Map<string, { trend: PriceTrend; change_pct: number; products_compared: number }> {
+  const purIndex = new Map<string, { supplier_id: string | null; date: string }>();
+  for (const p of purchases) purIndex.set(p.id, { supplier_id: p.supplier_id, date: p.purchase_date });
+
+  // Group: supplier -> product -> [{date, rate, qty}]
+  const bySupplierProduct = new Map<string, Map<string, { date: string; rate: number; qty: number }[]>>();
+  for (const it of items) {
+    const meta = purIndex.get(it.purchase_id);
+    if (!meta || !meta.supplier_id) continue;
+    const rate = Number(it.purchase_rate);
+    if (!isFinite(rate) || rate <= 0) continue;
+    const qty = Number(it.quantity) || 0;
+    let prodMap = bySupplierProduct.get(meta.supplier_id);
+    if (!prodMap) {
+      prodMap = new Map();
+      bySupplierProduct.set(meta.supplier_id, prodMap);
+    }
+    const arr = prodMap.get(it.product_id) ?? [];
+    arr.push({ date: meta.date, rate, qty });
+    prodMap.set(it.product_id, arr);
+  }
+
+  const out = new Map<string, { trend: PriceTrend; change_pct: number; products_compared: number }>();
+
+  for (const [supplierId, prodMap] of bySupplierProduct) {
+    let weightedDrift = 0;
+    let totalWeight = 0;
+    let productsCompared = 0;
+
+    for (const arr of prodMap.values()) {
+      if (arr.length < 2) continue;
+      const sorted = arr.slice().sort((a, b) => a.date.localeCompare(b.date));
+      const last = sorted[sorted.length - 1];
+      const prior = sorted.slice(Math.max(0, sorted.length - 4), sorted.length - 1);
+      const priorAvg = prior.reduce((s, x) => s + x.rate, 0) / prior.length;
+      if (priorAvg <= 0) continue;
+      const driftPct = ((last.rate - priorAvg) / priorAvg) * 100;
+      const weight = Math.max(1, last.qty);
+      weightedDrift += driftPct * weight;
+      totalWeight += weight;
+      productsCompared += 1;
+    }
+
+    if (productsCompared === 0 || totalWeight === 0) {
+      out.set(supplierId, { trend: "insufficient_data", change_pct: 0, products_compared: 0 });
+      continue;
+    }
+    const avgDrift = weightedDrift / totalWeight;
+    const trend: PriceTrend =
+      avgDrift > 3 ? "rising" : avgDrift < -3 ? "falling" : "stable";
+    out.set(supplierId, {
+      trend,
+      change_pct: Math.round(avgDrift * 100) / 100,
+      products_compared: productsCompared,
+    });
+  }
+  return out;
+}
+
 export const supplierPerformanceService = {
-  /**
-   * Returns performance metrics for every supplier of the dealer.
-   */
   async list(dealerId: string, opts: ListOptions = {}): Promise<SupplierPerformance[]> {
-    const [supRes, purRes, retRes, ledRes] = await Promise.all([
+    const [supRes, purRes, retRes, ledRes, itemsRes] = await Promise.all([
       supabase
         .from("suppliers")
         .select("id, name, status")
@@ -145,19 +233,26 @@ export const supplierPerformanceService = {
         .from("supplier_ledger")
         .select("supplier_id, amount, type")
         .eq("dealer_id", dealerId),
+      supabase
+        .from("purchase_items")
+        .select("purchase_id, product_id, purchase_rate, quantity")
+        .eq("dealer_id", dealerId),
     ]);
 
     if (supRes.error) throw new Error(supRes.error.message);
     if (purRes.error) throw new Error(purRes.error.message);
     if (retRes.error) throw new Error(retRes.error.message);
     if (ledRes.error) throw new Error(ledRes.error.message);
+    if (itemsRes.error) throw new Error(itemsRes.error.message);
 
     const suppliers = supRes.data ?? [];
     const purchases = purRes.data ?? [];
     const returns = (retRes.data ?? []).filter((r) => r.status !== "cancelled");
     const ledger = ledRes.data ?? [];
+    const items = (itemsRes.data ?? []) as PurchaseItemRow[];
 
-    // Index by supplier
+    const trendMap = computePriceTrends(purchases, items);
+
     const purBySup = new Map<string, { date: string; amount: number }[]>();
     for (const p of purchases) {
       if (!p.supplier_id) continue;
@@ -175,7 +270,6 @@ export const supplierPerformanceService = {
       retBySup.set(r.supplier_id, cur);
     }
 
-    // Outstanding
     const outBySup = new Map<string, number>();
     for (const e of ledger) {
       if (!e.supplier_id) continue;
@@ -208,7 +302,6 @@ export const supplierPerformanceService = {
         .filter((p) => new Date(p.date).getTime() >= thirtyDaysAgo)
         .reduce((sum, p) => sum + p.amount, 0);
 
-      // Cadence + delay analysis
       let avgGap: number | null = null;
       let lastGap: number | null = null;
       let longestGap: number | null = null;
@@ -226,9 +319,8 @@ export const supplierPerformanceService = {
           avgGap = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
           lastGap = Math.round(gaps[gaps.length - 1]);
           longestGap = Math.round(Math.max(...gaps));
-          // Delayed = gap > median × 1.5 (supplier's own tolerance)
           const med = median(gaps);
-          const tolerance = Math.max(med * 1.5, med + 7); // at least 7d slack
+          const tolerance = Math.max(med * 1.5, med + 7);
           for (const g of gaps) {
             if (g > tolerance) delayed += 1;
             else onTime += 1;
@@ -244,6 +336,8 @@ export const supplierPerformanceService = {
           : 0;
 
       const outstanding = Math.max(0, Math.round((outBySup.get(s.id) ?? 0) * 100) / 100);
+
+      const trendInfo = trendMap.get(s.id) ?? { trend: "insufficient_data" as PriceTrend, change_pct: 0, products_compared: 0 };
 
       const { score, factors } = computeScore({
         returnRatePct,
@@ -273,6 +367,9 @@ export const supplierPerformanceService = {
         return_rate_pct: returnRatePct,
         outstanding_amount: outstanding,
         recent_purchase_value_30d: Math.round(recentValue30d * 100) / 100,
+        price_trend: trendInfo.trend,
+        price_change_pct: trendInfo.change_pct,
+        trend_products_compared: trendInfo.products_compared,
         reliability_score: score,
         reliability_band: classify(score, lastPurchase),
         score_factors: factors,
@@ -280,18 +377,80 @@ export const supplierPerformanceService = {
     });
   },
 
-  /**
-   * Performance for a single supplier (used in supplier detail page).
-   */
   async getForSupplier(dealerId: string, supplierId: string): Promise<SupplierPerformance | null> {
     const all = await this.list(dealerId);
     return all.find((s) => s.supplier_id === supplierId) ?? null;
   },
 
   /**
-   * Compact dashboard rollup — top reliable, at-risk, high-outstanding,
-   * high-return.
+   * Per-product price trend detail for a single supplier.
+   * Used in supplier detail drilldown.
    */
+  async getPriceTrendDetail(dealerId: string, supplierId: string) {
+    const [purRes, itemsRes, prodRes] = await Promise.all([
+      supabase
+        .from("purchases")
+        .select("id, supplier_id, purchase_date")
+        .eq("dealer_id", dealerId)
+        .eq("supplier_id", supplierId),
+      supabase
+        .from("purchase_items")
+        .select("purchase_id, product_id, purchase_rate, quantity")
+        .eq("dealer_id", dealerId),
+      supabase
+        .from("products")
+        .select("id, name, sku")
+        .eq("dealer_id", dealerId),
+    ]);
+    if (purRes.error) throw new Error(purRes.error.message);
+    if (itemsRes.error) throw new Error(itemsRes.error.message);
+    if (prodRes.error) throw new Error(prodRes.error.message);
+
+    const purIds = new Set((purRes.data ?? []).map((p) => p.id));
+    const purDate = new Map((purRes.data ?? []).map((p) => [p.id, p.purchase_date] as const));
+    const products = new Map((prodRes.data ?? []).map((p) => [p.id, p] as const));
+
+    const grouped = new Map<string, { date: string; rate: number; qty: number }[]>();
+    for (const it of itemsRes.data ?? []) {
+      if (!purIds.has(it.purchase_id)) continue;
+      const rate = Number(it.purchase_rate);
+      if (!isFinite(rate) || rate <= 0) continue;
+      const arr = grouped.get(it.product_id) ?? [];
+      arr.push({
+        date: purDate.get(it.purchase_id) ?? "",
+        rate,
+        qty: Number(it.quantity) || 0,
+      });
+      grouped.set(it.product_id, arr);
+    }
+
+    const rows = Array.from(grouped.entries())
+      .map(([productId, arr]) => {
+        const sorted = arr.slice().sort((a, b) => a.date.localeCompare(b.date));
+        const last = sorted[sorted.length - 1];
+        const first = sorted[0];
+        const prior = sorted.slice(Math.max(0, sorted.length - 4), sorted.length - 1);
+        const priorAvg = prior.length > 0 ? prior.reduce((s, x) => s + x.rate, 0) / prior.length : last.rate;
+        const driftPct = priorAvg > 0 ? ((last.rate - priorAvg) / priorAvg) * 100 : 0;
+        const product = products.get(productId);
+        return {
+          product_id: productId,
+          product_name: product?.name ?? "Unknown",
+          sku: product?.sku ?? "",
+          purchases: sorted.length,
+          first_rate: first.rate,
+          last_rate: last.rate,
+          avg_prior_rate: Math.round(priorAvg * 100) / 100,
+          change_pct: Math.round(driftPct * 100) / 100,
+          last_date: last.date,
+        };
+      })
+      .filter((r) => r.purchases >= 2)
+      .sort((a, b) => Math.abs(b.change_pct) - Math.abs(a.change_pct));
+
+    return rows;
+  },
+
   async getDashboardStats(dealerId: string) {
     const all = await this.list(dealerId);
     const active = all.filter((s) => s.total_purchases > 0);
@@ -316,6 +475,11 @@ export const supplierPerformanceService = {
       .sort((a, b) => b.return_rate_pct - a.return_rate_pct)
       .slice(0, 5);
 
+    const risingPrices = active
+      .filter((s) => s.price_trend === "rising")
+      .sort((a, b) => b.price_change_pct - a.price_change_pct)
+      .slice(0, 5);
+
     const delayedCount = active.filter(
       (s) => s.days_since_last_purchase !== null && s.days_since_last_purchase > 90,
     ).length;
@@ -327,12 +491,14 @@ export const supplierPerformanceService = {
       atRiskCount: atRisk.length,
       delayedCount,
       highReturnCount: highReturn.length,
+      risingPriceCount: risingPrices.length,
       totalOutstanding:
         Math.round(active.reduce((sum, s) => sum + s.outstanding_amount, 0) * 100) / 100,
       topReliable,
       atRisk,
       highOutstanding,
       highReturn,
+      risingPrices,
     };
   },
 };
