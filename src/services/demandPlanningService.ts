@@ -291,7 +291,7 @@ async function loadSalesMap(dealerId: string, ids: string[], settings: DemandPla
     if (cur) {
       if (!cur.lastSale || createdAt > cur.lastSale) cur.lastSale = createdAt;
     } else {
-      m.set(row.product_id, { sold30: 0, sold90: 0, lastSale: createdAt });
+      m.set(row.product_id, { sold30: 0, sold60: 0, sold90: 0, lastSale: createdAt });
     }
   }
   return m;
@@ -321,6 +321,7 @@ function classify(
   shortage: number,
   incoming: number,
   sold30: number,
+  sold60: number,
   sold90: number,
   lastSale: string | null,
   s: DemandPlanningSettings,
@@ -331,25 +332,63 @@ function classify(
   const sellable = Math.max(0, free - safety);
   const cover = velocity > 0 ? sellable / velocity : null;
 
+  // Velocity trend: compare last 30 days vs prior 30 (sold60 - sold30).
+  const prior30 = Math.max(0, sold60 - sold30);
+  let velocity_trend: "rising" | "steady" | "falling" | "flat" = "flat";
+  if (sold30 === 0 && prior30 === 0) {
+    velocity_trend = "flat";
+  } else if (prior30 === 0) {
+    velocity_trend = sold30 > 0 ? "rising" : "flat";
+  } else {
+    const ratio = sold30 / prior30;
+    if (ratio >= 1.25) velocity_trend = "rising";
+    else if (ratio <= 0.75) velocity_trend = "falling";
+    else velocity_trend = "steady";
+  }
+
   const flags: DemandFlag[] = [];
+  const reasons: string[] = [];
+
   if (velocity > 0 && (free <= safety || (cover !== null && cover < s.stockout_cover_days))) {
     flags.push("stockout_risk");
+    reasons.push(
+      cover !== null
+        ? `Only ~${cover.toFixed(1)} days of cover at current velocity (target ≥ ${s.stockout_cover_days}d).`
+        : `Free stock at or below safety cushion (${safety}).`,
+    );
   }
   if (velocity > 0 && free <= p.reorder_level + safety) {
     flags.push("low_stock");
+    reasons.push(`Free stock ${free} ≤ reorder level ${p.reorder_level} + safety ${safety}.`);
   }
   if (
     velocity > 0 &&
     (free <= p.reorder_level + safety || (cover !== null && cover < s.reorder_cover_days))
   ) {
     flags.push("reorder_suggested");
+    reasons.push(
+      cover !== null && cover < s.reorder_cover_days
+        ? `Cover ${cover.toFixed(1)}d is below reorder threshold (${s.reorder_cover_days}d).`
+        : `Free stock has reached the reorder line.`,
+    );
   }
-  if (sold30 >= s.fast_moving_30d_qty) flags.push("fast_moving");
-  if (sold90 > 0 && sold30 < s.slow_moving_30d_max) flags.push("slow_moving");
+  if (sold30 >= s.fast_moving_30d_qty) {
+    flags.push("fast_moving");
+    reasons.push(`Sold ${sold30} units in last 30d (≥ ${s.fast_moving_30d_qty}).`);
+  }
+  if (sold90 > 0 && sold30 < s.slow_moving_30d_max) {
+    flags.push("slow_moving");
+    reasons.push(`Only ${sold30} sold in last 30d (threshold < ${s.slow_moving_30d_max}).`);
+  }
 
   const daysSince = daysBetween(lastSale);
   if (totalStock > 0 && (daysSince === null || daysSince >= s.dead_stock_days) && sold90 === 0) {
     flags.push("dead_stock");
+    reasons.push(
+      daysSince === null
+        ? `Stock on hand but no sale ever recorded.`
+        : `${daysSince} days since last sale (dead after ${s.dead_stock_days}d).`,
+    );
   }
 
   const targetQty = Math.ceil(velocity * s.target_cover_days) + safety;
@@ -378,7 +417,8 @@ function classify(
 
   return {
     flags: flags.length ? flags : ["ok" as DemandFlag],
-    velocity, cover, suggested, safety,
+    reasons,
+    velocity, velocity_trend, cover, suggested, safety,
     coverage_status, coverage_ratio, uncovered_gap,
   };
 }
