@@ -238,7 +238,7 @@ async function loadShortageMap(dealerId: string, ids: string[]) {
   return m;
 }
 
-interface SalesAgg { sold30: number; sold90: number; lastSale: string | null }
+interface SalesAgg { sold30: number; sold60: number; sold90: number; lastSale: string | null }
 
 async function loadSalesMap(dealerId: string, ids: string[], settings: DemandPlanningSettings) {
   const m = new Map<string, SalesAgg>();
@@ -254,7 +254,9 @@ async function loadSalesMap(dealerId: string, ids: string[], settings: DemandPla
     .gte("sales.created_at", sinceLong);
   if (error) return m;
 
-  const cutoffShort = today().getTime() - settings.velocity_window_days * 86_400_000;
+  const now = today().getTime();
+  const cutoffShort = now - settings.velocity_window_days * 86_400_000;
+  const cutoff60 = now - 60 * 86_400_000;
   for (const row of (data ?? []) as Array<{
     product_id: string;
     quantity: number | string;
@@ -264,8 +266,9 @@ async function loadSalesMap(dealerId: string, ids: string[], settings: DemandPla
     if (!createdAt) continue;
     const ts = new Date(createdAt).getTime();
     const qty = Number(row.quantity ?? 0);
-    const cur = m.get(row.product_id) ?? { sold30: 0, sold90: 0, lastSale: null };
+    const cur = m.get(row.product_id) ?? { sold30: 0, sold60: 0, sold90: 0, lastSale: null };
     cur.sold90 += qty;
+    if (ts >= cutoff60) cur.sold60 += qty;
     if (ts >= cutoffShort) cur.sold30 += qty;
     if (!cur.lastSale || createdAt > cur.lastSale) cur.lastSale = createdAt;
     m.set(row.product_id, cur);
