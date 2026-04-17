@@ -237,6 +237,7 @@ const reportGroups = [
     items: [
       { key: "purchase-need", label: "Purchase Need by Product", icon: Package },
       { key: "purchase-customer-demand", label: "Customer / Site Demand", icon: Users },
+      { key: "purchase-project-site", label: "Shortage by Project / Site", icon: Folder },
     ],
   },
   {
