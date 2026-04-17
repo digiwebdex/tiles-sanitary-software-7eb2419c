@@ -83,9 +83,27 @@ export interface PlanningStats {
   totalCustomersWaiting: number;
   oldestDemandDate: string | null;
   topProducts: ProductShortageRow[];
+  topProjects: ProjectShortageRow[];
   openCount: number;
   plannedCount: number;
   partialCount: number;
+}
+
+export interface ProjectShortageRow {
+  /** stable composite key — use as React key */
+  key: string;
+  project_id: string | null;
+  project_name: string;
+  site_id: string | null;
+  site_name: string | null;
+  customer_id: string | null;
+  customer_name: string;
+  shortage_qty: number;
+  pending_lines: number;
+  pending_products: number;
+  oldest_demand_date: string | null;
+  open_qty: number;
+  planned_qty: number;
 }
 
 export interface CreateDraftInput {
