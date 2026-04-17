@@ -106,6 +106,14 @@ import {
   HighReturnSuppliersReport,
   SupplierPriceTrendReport,
 } from "./SupplierPerformanceReports";
+import {
+  ReorderSuggestionReport,
+  StockoutRiskReport,
+  DeadStockReport,
+  SlowMovingReport,
+  FastMovingReport,
+  IncomingCoverageReport,
+} from "./DemandPlanningReports";
 import { cn } from "@/lib/utils";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
@@ -116,7 +124,7 @@ import {
   ShoppingCart, DollarSign, Users, History, BookOpen, Clock, TrendingUp,
   ChevronDown, GitBranch, Shield, Lock, ShieldCheck, FileBarChart, UserCheck,
   FileSignature, Coins, Pencil, Folder, MapPin, Banknote, MonitorSpeaker, Send, PackageCheck as PackageCheck2,
-  Truck, Wallet,
+  Truck, Wallet, Brain, Archive, TrendingDown,
 } from "lucide-react";
 
 interface ReportsPageContentProps {
