@@ -111,6 +111,8 @@ const ViewPurchasePage = () => {
           </TableBody>
         </Table>
       </div>
+
+      {dealerId && id && <LinkedShortagesPanel dealerId={dealerId} purchaseId={id} />}
     </div>
   );
 };
