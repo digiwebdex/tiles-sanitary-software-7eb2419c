@@ -58,12 +58,13 @@ export function SupplierPerformancePanel({ dealerId, supplierId }: Props) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <CardTitle className="text-base flex items-center gap-2">
             <Truck className="h-4 w-4" /> Performance
           </CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <ReliabilityBadge band={data.reliability_band} />
+            <PriceTrendBadge trend={data.price_trend} changePct={data.price_change_pct} />
             <span className="text-xs text-muted-foreground">
               Score <span className="font-semibold text-foreground">{data.reliability_score}</span>/100
             </span>
@@ -120,6 +121,17 @@ export function SupplierPerformancePanel({ dealerId, supplierId }: Props) {
             value={data.days_since_last_purchase !== null ? `${data.days_since_last_purchase}d` : "—"}
             danger={(data.days_since_last_purchase ?? 0) > 90}
           />
+          <Metric
+            icon={priceIcon(data.price_trend)}
+            label="Price Trend"
+            value={priceLabel(data.price_trend, data.price_change_pct)}
+            sub={
+              data.trend_products_compared > 0
+                ? `${data.trend_products_compared} product${data.trend_products_compared === 1 ? "" : "s"} compared`
+                : "Need 2+ purchases per product"
+            }
+            danger={data.price_trend === "rising" && Math.abs(data.price_change_pct) > 10}
+          />
         </div>
         {data.score_factors.length > 0 ? (
           <div className="rounded-md border border-dashed bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
@@ -131,8 +143,43 @@ export function SupplierPerformancePanel({ dealerId, supplierId }: Props) {
             Clean record — no penalties applied to score.
           </div>
         )}
+        <div className="rounded-md border border-dashed bg-muted/10 px-3 py-2 text-[11px] text-muted-foreground leading-relaxed">
+          <span className="font-medium text-foreground">Risk model:</span> Score starts at 100 and deducts for return rate, inactivity ({">"}90d), high outstanding ({">"}5× avg), and delayed cadence ({">"}30%). Price trend is shown for awareness but excluded from score.
+        </div>
       </CardContent>
     </Card>
+  );
+}
+
+function priceIcon(trend: PriceTrend) {
+  if (trend === "rising") return <TrendingUp className="h-3.5 w-3.5" />;
+  if (trend === "falling") return <TrendingDown className="h-3.5 w-3.5" />;
+  return <Minus className="h-3.5 w-3.5" />;
+}
+
+function priceLabel(trend: PriceTrend, pct: number): string {
+  if (trend === "insufficient_data") return "—";
+  if (trend === "stable") return "Stable";
+  const sign = pct > 0 ? "+" : "";
+  return `${trend === "rising" ? "Rising" : "Falling"} ${sign}${pct.toFixed(1)}%`;
+}
+
+function PriceTrendBadge({ trend, changePct }: { trend: PriceTrend; changePct: number }) {
+  if (trend === "insufficient_data") return null;
+  const styles =
+    trend === "rising"
+      ? "bg-destructive/10 text-destructive border-destructive/30"
+      : trend === "falling"
+        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+        : "bg-muted text-muted-foreground border-border";
+  const label =
+    trend === "rising" ? `↑ +${changePct.toFixed(1)}%` :
+    trend === "falling" ? `↓ ${changePct.toFixed(1)}%` :
+    "Stable";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${styles}`}>
+      Price {label}
+    </span>
   );
 }
 
