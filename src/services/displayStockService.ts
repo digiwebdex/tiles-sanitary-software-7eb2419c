@@ -205,6 +205,59 @@ export const displayStockService = {
       new_data: { product_id: productId, quantity, notes },
     });
   },
+
+  /**
+   * Replace damaged display unit with new sellable stock.
+   * Net effect: -N sellable, display_qty unchanged (1 damaged out, 1 fresh in).
+   */
+  async replaceDisplay(
+    productId: string,
+    quantity: number,
+    dealerId: string,
+    notes?: string
+  ) {
+    if (quantity <= 0) throw new Error("Quantity must be positive");
+
+    await stockService.deductStock(productId, quantity, dealerId);
+
+    const row = await getOrCreateDisplayRow(productId, dealerId);
+    const { error } = await supabase
+      .from("display_stock")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", row.id);
+    if (error) throw new Error(error.message);
+
+    const userId = (await supabase.auth.getUser()).data.user?.id ?? null;
+    await supabase.from("display_movements").insert({
+      dealer_id: dealerId,
+      product_id: productId,
+      movement_type: "display_replaced",
+      quantity,
+      notes: notes ?? null,
+      created_by: userId,
+    });
+
+    await logAudit({
+      dealer_id: dealerId,
+      action: "display_replaced",
+      table_name: "display_stock",
+      record_id: row.id,
+      new_data: { product_id: productId, quantity, notes },
+    });
+  },
+
+  /**
+   * Display movement history (audit trail) for a dealer.
+   */
+  async listMovements(dealerId: string) {
+    const { data, error } = await supabase
+      .from("display_movements")
+      .select("*, product:products(name, sku, unit_type)")
+      .eq("dealer_id", dealerId)
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  },
 };
 
 export const sampleIssueService = {
