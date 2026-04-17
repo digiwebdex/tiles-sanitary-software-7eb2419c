@@ -160,6 +160,14 @@ export const challanService = {
       .update({ sale_status: "delivered" } as any)
       .eq("id", (challan as any).sale_id);
 
+    // BUSINESS RULE: full delivery promotes any linked commission to "earned".
+    try {
+      const { saleCommissionService } = await import("@/services/commissionService");
+      await saleCommissionService.promoteToEarnedIfFullyDelivered((challan as any).sale_id, dealerId);
+    } catch (e) {
+      console.warn("Commission promotion on challan delivery skipped:", e);
+    }
+
     await logAudit({
       dealer_id: dealerId,
       action: "challan_delivered",
@@ -444,12 +452,18 @@ export const challanService = {
       .update({ delivery_status: newStatus } as any)
       .eq("id", challanId);
 
-    // When delivered, also update sale_status
+    // When delivered, also update sale_status and promote commission to earned.
     if (newStatus === "delivered") {
       await supabase
         .from("sales")
         .update({ sale_status: "delivered" } as any)
         .eq("id", (challan as any).sale_id);
+      try {
+        const { saleCommissionService } = await import("@/services/commissionService");
+        await saleCommissionService.promoteToEarnedIfFullyDelivered((challan as any).sale_id, dealerId);
+      } catch (e) {
+        console.warn("Commission promotion on challan status update skipped:", e);
+      }
     }
 
     await logAudit({
