@@ -41,6 +41,8 @@ import {
   PendingFulfillmentReport,
   ShortageDemandReport,
   CustomerPendingDeliveryReport,
+  ReadyForDeliveryReport,
+  PartiallyDeliveredReport,
 } from "./BackorderReports";
 import {
   BatchStockReport,
@@ -164,6 +166,8 @@ const reportGroups = [
     items: [
       { key: "backorder", label: "Backorder Report", icon: AlertTriangle },
       { key: "pending-fulfillment", label: "Pending Fulfillment", icon: Clock },
+      { key: "ready-for-delivery", label: "Ready for Delivery", icon: Package },
+      { key: "partially-delivered", label: "Partially Delivered", icon: Package },
       { key: "shortage-demand", label: "Shortage Demand", icon: Tags },
       { key: "customer-pending-delivery", label: "Customer Pending", icon: Users },
     ],
@@ -291,6 +295,8 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "stock-movement": return <StockMovementReport dealerId={dealerId} />;
       case "backorder": return <BackorderReport dealerId={dealerId} />;
       case "pending-fulfillment": return <PendingFulfillmentReport dealerId={dealerId} />;
+      case "ready-for-delivery": return <ReadyForDeliveryReport dealerId={dealerId} />;
+      case "partially-delivered": return <PartiallyDeliveredReport dealerId={dealerId} />;
       case "shortage-demand": return <ShortageDemandReport dealerId={dealerId} />;
       case "customer-pending-delivery": return <CustomerPendingDeliveryReport dealerId={dealerId} />;
       case "batch-stock": return <BatchStockReport dealerId={dealerId} />;
