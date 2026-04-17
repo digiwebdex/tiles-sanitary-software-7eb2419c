@@ -65,16 +65,20 @@ export interface DemandRow {
   incoming_qty: number;
   uncovered_gap: number;
   coverage_status: CoverageStatus;
-  coverage_ratio: number | null;     // incoming / need; null when need <= 0
+  coverage_ratio: number | null;
   sold_30d: number;
+  sold_60d: number;
   sold_90d: number;
   velocity_per_day: number;
+  velocity_trend: "rising" | "steady" | "falling" | "flat";
   days_of_cover: number | null;
   last_sale_date: string | null;
   days_since_last_sale: number | null;
   suggested_reorder_qty: number;
   flags: DemandFlag[];
   primary_flag: DemandFlag;
+  /** Owner-friendly reasons explaining why each non-OK flag fired. */
+  flag_reasons: string[];
 }
 
 export interface DemandStats {
@@ -86,9 +90,15 @@ export interface DemandStats {
   fastMovingCount: number;
   slowMovingCount: number;
   incomingCoverageProductCount: number;
-  uncoveredGapCount: number;       // products needing reorder where incoming doesn't cover
+  uncoveredGapCount: number;
   topCategoriesAtRisk: Array<{ key: string; count: number }>;
   topBrandsAtRisk: Array<{ key: string; count: number }>;
+  topWaitingProjects: Array<{
+    project_id: string;
+    project_name: string;
+    open_shortage: number;
+    days_waiting: number;
+  }>;
 }
 
 export interface DemandGroupRow {
@@ -104,6 +114,21 @@ export interface DemandGroupRow {
   incoming_total: number;
   open_shortage_total: number;
   uncovered_gap_total: number;
+}
+
+export interface ProjectDemandRow {
+  project_id: string;
+  project_name: string;
+  site_id: string | null;
+  site_name: string | null;
+  customer_id: string | null;
+  customer_name: string | null;
+  product_count: number;
+  open_shortage_total: number;
+  incoming_total: number;
+  uncovered_gap: number;
+  oldest_shortage_date: string | null;
+  days_waiting: number | null;
 }
 
 interface ProductLite {
