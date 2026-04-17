@@ -561,6 +561,9 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
       {/* Display & Sample Widgets */}
       <DisplaySampleDashboardWidgets dealerId={dealerId} />
 
+      {/* Supplier Performance Widgets */}
+      <SupplierPerformanceWidgets dealerId={dealerId} />
+
       {/* Top Overdue Customers Widget */}
       {topOverdue.length > 0 && (
         <Card className="border-destructive/30">
