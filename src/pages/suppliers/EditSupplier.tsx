@@ -4,6 +4,7 @@ import { supplierService } from "@/services/supplierService";
 import SupplierForm from "@/modules/suppliers/SupplierForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SupplierPerformancePanel } from "@/components/SupplierPerformancePanel";
+import { SupplierNotesPanel } from "@/components/SupplierNotesPanel";
 
 const EditSupplier = () => {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +34,8 @@ const EditSupplier = () => {
       </Card>
 
       <SupplierPerformancePanel dealerId={supplier.dealer_id} supplierId={supplier.id} />
+
+      <SupplierNotesPanel dealerId={supplier.dealer_id} supplierId={supplier.id} />
     </div>
   );
 };

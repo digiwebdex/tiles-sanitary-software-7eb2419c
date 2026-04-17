@@ -104,6 +104,7 @@ import {
   SupplierLeadTimeReport,
   SupplierReturnReport,
   HighReturnSuppliersReport,
+  SupplierPriceTrendReport,
 } from "./SupplierPerformanceReports";
 import { cn } from "@/lib/utils";
 import {
@@ -292,6 +293,7 @@ const reportGroups = [
       { key: "supplier-exposure", label: "Outstanding Exposure", icon: Wallet },
       { key: "supplier-top-reliable", label: "Top Reliable", icon: ShieldCheck },
       { key: "supplier-at-risk", label: "At-Risk", icon: AlertTriangle },
+      { key: "supplier-price-trend", label: "Price Trend", icon: TrendingUp },
     ],
   },
   {
@@ -393,6 +395,7 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "supplier-exposure": return <SupplierExposureReport dealerId={dealerId} />;
       case "supplier-top-reliable": return <TopReliableSuppliersReport dealerId={dealerId} />;
       case "supplier-at-risk": return <AtRiskSuppliersReport dealerId={dealerId} />;
+      case "supplier-price-trend": return <SupplierPriceTrendReport dealerId={dealerId} />;
       default: return <StockReport dealerId={dealerId} />;
     }
   };

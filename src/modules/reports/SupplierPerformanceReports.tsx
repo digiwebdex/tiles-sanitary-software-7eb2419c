@@ -14,11 +14,12 @@ import {
   supplierPerformanceService,
   type ReliabilityBand,
   type SupplierPerformance,
+  type PriceTrend,
 } from "@/services/supplierPerformanceService";
 import { formatCurrency } from "@/lib/utils";
 import { exportToExcel } from "@/lib/exportUtils";
 import { usePermissions } from "@/hooks/usePermissions";
-import { Download, Truck, Search, AlertTriangle, ShieldCheck, Wallet, Clock } from "lucide-react";
+import { Download, Truck, Search, AlertTriangle, ShieldCheck, Wallet, Clock, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface Props {
   dealerId: string;
@@ -46,7 +47,7 @@ export function ReliabilityBadge({ band }: { band: ReliabilityBand }) {
   );
 }
 
-type QuickFilter = "all" | "delayed" | "high_return" | "high_outstanding";
+type QuickFilter = "all" | "delayed" | "high_return" | "high_outstanding" | "rising_price" | "active_only" | "inactive_only";
 
 /* ─── Supplier Performance Report (main) ────────────────────── */
 export function SupplierPerformanceReport({ dealerId }: Props) {
@@ -74,6 +75,9 @@ export function SupplierPerformanceReport({ dealerId }: Props) {
       if (quick === "delayed" && !(r.days_since_last_purchase !== null && r.days_since_last_purchase > 90)) return false;
       if (quick === "high_return" && r.return_rate_pct < 5) return false;
       if (quick === "high_outstanding" && !(r.outstanding_amount > 0 && r.avg_purchase_value > 0 && r.outstanding_amount > r.avg_purchase_value * 5)) return false;
+      if (quick === "rising_price" && r.price_trend !== "rising") return false;
+      if (quick === "active_only" && r.total_purchases === 0) return false;
+      if (quick === "inactive_only" && r.reliability_band !== "inactive") return false;
       if (search.trim()) {
         const s = search.toLowerCase();
         if (!r.supplier_name.toLowerCase().includes(s)) return false;
@@ -124,12 +128,15 @@ export function SupplierPerformanceReport({ dealerId }: Props) {
               </SelectContent>
             </Select>
             <Select value={quick} onValueChange={(v) => setQuick(v as QuickFilter)}>
-              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All suppliers</SelectItem>
+                <SelectItem value="active_only">Active only</SelectItem>
+                <SelectItem value="inactive_only">Inactive only</SelectItem>
                 <SelectItem value="delayed">Delayed (90d+)</SelectItem>
                 <SelectItem value="high_return">High return ≥5%</SelectItem>
                 <SelectItem value="high_outstanding">High exposure</SelectItem>
+                <SelectItem value="rising_price">Rising price</SelectItem>
               </SelectContent>
             </Select>
             {canExportReports && rows.length > 0 && (
@@ -594,3 +601,103 @@ function SimpleSupplierTable({
     </Card>
   );
 }
+
+/* ─── Supplier Price Trend Report (Batch 3) ───────────────── */
+const TREND_LABEL: Record<PriceTrend, string> = {
+  rising: "Rising",
+  falling: "Falling",
+  stable: "Stable",
+  insufficient_data: "—",
+};
+
+function trendIcon(t: PriceTrend) {
+  if (t === "rising") return <TrendingUp className="h-3.5 w-3.5 text-destructive" />;
+  if (t === "falling") return <TrendingDown className="h-3.5 w-3.5 text-emerald-600" />;
+  return <Minus className="h-3.5 w-3.5 text-muted-foreground" />;
+}
+
+export function SupplierPriceTrendReport({ dealerId }: Props) {
+  const [filter, setFilter] = useState<PriceTrend | "all">("all");
+  const { data, isLoading } = useQuery({
+    queryKey: ["supplier-performance", dealerId],
+    queryFn: () => supplierPerformanceService.list(dealerId),
+    enabled: !!dealerId,
+  });
+
+  const rows = (data ?? [])
+    .filter((s) => s.trend_products_compared > 0)
+    .filter((s) => filter === "all" || s.price_trend === filter)
+    .sort((a, b) => Math.abs(b.price_change_pct) - Math.abs(a.price_change_pct));
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" /> Supplier Price Trend
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Compares each supplier's last unit rate against the average of prior rates per product. Trend is volume-weighted; bands: stable (&lt;3% drift), rising, falling.
+            </p>
+          </div>
+          <Select value={filter} onValueChange={(v) => setFilter(v as PriceTrend | "all")}>
+            <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All trends</SelectItem>
+              <SelectItem value="rising">Rising only</SelectItem>
+              <SelectItem value="falling">Falling only</SelectItem>
+              <SelectItem value="stable">Stable only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-muted-foreground">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-muted-foreground text-center py-8">
+            Need at least 2 purchases of the same product per supplier to compute trend.
+          </p>
+        ) : (
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Trend</TableHead>
+                  <TableHead className="text-right">Change %</TableHead>
+                  <TableHead className="text-right">Products Compared</TableHead>
+                  <TableHead className="text-right">Total Purchases</TableHead>
+                  <TableHead className="text-right">Last Purchase</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.supplier_id}>
+                    <TableCell className="font-medium">{r.supplier_name}</TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center gap-1.5">
+                        {trendIcon(r.price_trend)} {TREND_LABEL[r.price_trend]}
+                      </span>
+                    </TableCell>
+                    <TableCell className={`text-right font-semibold ${
+                      r.price_trend === "rising" ? "text-destructive" :
+                      r.price_trend === "falling" ? "text-emerald-700" : ""
+                    }`}>
+                      {r.price_change_pct > 0 ? "+" : ""}{r.price_change_pct.toFixed(2)}%
+                    </TableCell>
+                    <TableCell className="text-right">{r.trend_products_compared}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">{r.total_purchases}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">{r.last_purchase_date ?? "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
