@@ -358,6 +358,11 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "purchase-project-site": return <ProjectSiteShortageReport dealerId={dealerId} />;
       case "commission-liability": return <CommissionLiabilityReport dealerId={dealerId} />;
       case "commission-by-source": return <CommissionBySourceReport dealerId={dealerId} />;
+      case "display-stock-report": return <DisplayStockReport dealerId={dealerId} />;
+      case "issued-samples": return <IssuedSampleReport dealerId={dealerId} />;
+      case "returned-samples": return <ReturnedSampleReport dealerId={dealerId} />;
+      case "damaged-lost-samples": return <DamagedLostSampleReport dealerId={dealerId} />;
+      case "outstanding-samples": return <SampleOutstandingReport dealerId={dealerId} />;
       default: return <StockReport dealerId={dealerId} />;
     }
   };
