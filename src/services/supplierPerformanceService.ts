@@ -1,27 +1,29 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Supplier Performance Tracking — Batch 1
+ * Supplier Performance Tracking — Batch 1 + Batch 2
  *
  * Purely DERIVED from existing tables:
- *   - purchases             → frequency, recency, spend
+ *   - purchases             → frequency, recency, spend, cadence
  *   - purchase_returns      → return rate (reliability signal)
  *   - supplier_ledger       → outstanding exposure
  *
  * No schema changes. No side effects. Read-only analytics.
  *
- * Lead-time note:
- *   The ERP does not capture a separate "order placed" date,
- *   so we approximate "supply cadence" as the average gap between
- *   consecutive purchases from the same supplier. This is a practical
- *   reliability signal for tiles/sanitary dealers (regular suppliers
- *   should have a consistent cadence).
+ * Lead-time note (Batch 2 clarification):
+ *   The ERP does not capture a separate "order placed" date.
+ *   We approximate "supply cadence" as the average gap between
+ *   consecutive purchases. We then derive on-time vs delayed by comparing
+ *   each gap against the supplier's own median cadence × 1.5 (tolerance).
+ *   This is a practical reliability signal for tiles/sanitary dealers
+ *   without inventing data we don't have.
  *
  * Score (0-100), explainable:
  *   start at 100, then:
  *     - subtract 2 points per 1% return rate (capped at 40)
  *     - subtract 10 points if no purchase in last 90 days
  *     - subtract 10 points if outstanding > 5x avg purchase value
+ *     - subtract 10 points if delayed_pct > 30
  *   floor at 0.
  */
 
@@ -40,6 +42,11 @@ export interface SupplierPerformance {
 
   // cadence proxy for "lead time"
   avg_days_between_purchases: number | null;
+  last_gap_days: number | null;
+  longest_gap_days: number | null;
+  on_time_count: number;
+  delayed_count: number;
+  delayed_pct: number; // 0-100
 
   // reliability
   total_returns: number;
@@ -48,10 +55,12 @@ export interface SupplierPerformance {
 
   // exposure
   outstanding_amount: number;
+  recent_purchase_value_30d: number;
 
   // derived
   reliability_score: number; // 0-100
   reliability_band: ReliabilityBand;
+  score_factors: string[]; // explainable list of penalties applied
 }
 
 interface ListOptions {
@@ -73,12 +82,35 @@ function computeScore(args: {
   daysSinceLast: number | null;
   outstanding: number;
   avgPurchaseValue: number;
-}): number {
+  delayedPct: number;
+}): { score: number; factors: string[] } {
   let score = 100;
-  score -= Math.min(40, args.returnRatePct * 2);
-  if (args.daysSinceLast !== null && args.daysSinceLast > 90) score -= 10;
-  if (args.avgPurchaseValue > 0 && args.outstanding > args.avgPurchaseValue * 5) score -= 10;
-  return Math.max(0, Math.round(score));
+  const factors: string[] = [];
+  const returnPenalty = Math.min(40, args.returnRatePct * 2);
+  if (returnPenalty > 0) {
+    score -= returnPenalty;
+    factors.push(`-${Math.round(returnPenalty)} from ${args.returnRatePct.toFixed(1)}% return rate`);
+  }
+  if (args.daysSinceLast !== null && args.daysSinceLast > 90) {
+    score -= 10;
+    factors.push(`-10 inactive ${args.daysSinceLast}d`);
+  }
+  if (args.avgPurchaseValue > 0 && args.outstanding > args.avgPurchaseValue * 5) {
+    score -= 10;
+    factors.push(`-10 high outstanding exposure`);
+  }
+  if (args.delayedPct > 30) {
+    score -= 10;
+    factors.push(`-10 ${args.delayedPct.toFixed(0)}% delayed cadence`);
+  }
+  return { score: Math.max(0, Math.round(score)), factors };
+}
+
+function median(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  const sorted = nums.slice().sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
 export const supplierPerformanceService = {
@@ -143,9 +175,7 @@ export const supplierPerformanceService = {
       retBySup.set(r.supplier_id, cur);
     }
 
-    // Outstanding = sum(purchases / opening) - sum(payments / returns)
-    // We treat ledger.type honestly: "purchase" / "opening" increases payable;
-    // "payment" / "return" decreases payable. Unknown types ignored.
+    // Outstanding
     const outBySup = new Map<string, number>();
     for (const e of ledger) {
       if (!e.supplier_id) continue;
@@ -162,6 +192,7 @@ export const supplierPerformanceService = {
     }
 
     const today = Date.now();
+    const thirtyDaysAgo = today - 30 * 86_400_000;
 
     return suppliers.map<SupplierPerformance>((s) => {
       const pList = (purBySup.get(s.id) ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
@@ -173,7 +204,18 @@ export const supplierPerformanceService = {
         ? Math.floor((today - new Date(lastPurchase).getTime()) / 86_400_000)
         : null;
 
+      const recentValue30d = pList
+        .filter((p) => new Date(p.date).getTime() >= thirtyDaysAgo)
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      // Cadence + delay analysis
       let avgGap: number | null = null;
+      let lastGap: number | null = null;
+      let longestGap: number | null = null;
+      let onTime = 0;
+      let delayed = 0;
+      let delayedPct = 0;
+
       if (pList.length >= 2) {
         const gaps: number[] = [];
         for (let i = 1; i < pList.length; i++) {
@@ -182,6 +224,16 @@ export const supplierPerformanceService = {
         }
         if (gaps.length > 0) {
           avgGap = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
+          lastGap = Math.round(gaps[gaps.length - 1]);
+          longestGap = Math.round(Math.max(...gaps));
+          // Delayed = gap > median × 1.5 (supplier's own tolerance)
+          const med = median(gaps);
+          const tolerance = Math.max(med * 1.5, med + 7); // at least 7d slack
+          for (const g of gaps) {
+            if (g > tolerance) delayed += 1;
+            else onTime += 1;
+          }
+          delayedPct = gaps.length > 0 ? Math.round((delayed / gaps.length) * 100) : 0;
         }
       }
 
@@ -193,11 +245,12 @@ export const supplierPerformanceService = {
 
       const outstanding = Math.max(0, Math.round((outBySup.get(s.id) ?? 0) * 100) / 100);
 
-      const score = computeScore({
+      const { score, factors } = computeScore({
         returnRatePct,
         daysSinceLast,
         outstanding,
         avgPurchaseValue,
+        delayedPct,
       });
 
       return {
@@ -210,12 +263,19 @@ export const supplierPerformanceService = {
         last_purchase_date: lastPurchase,
         days_since_last_purchase: daysSinceLast,
         avg_days_between_purchases: avgGap,
+        last_gap_days: lastGap,
+        longest_gap_days: longestGap,
+        on_time_count: onTime,
+        delayed_count: delayed,
+        delayed_pct: delayedPct,
         total_returns: retInfo.count,
         total_return_value: Math.round(retInfo.total * 100) / 100,
         return_rate_pct: returnRatePct,
         outstanding_amount: outstanding,
+        recent_purchase_value_30d: Math.round(recentValue30d * 100) / 100,
         reliability_score: score,
         reliability_band: classify(score, lastPurchase),
+        score_factors: factors,
       };
     });
   },
@@ -229,7 +289,8 @@ export const supplierPerformanceService = {
   },
 
   /**
-   * Compact dashboard rollup — top reliable, at-risk, high-outstanding.
+   * Compact dashboard rollup — top reliable, at-risk, high-outstanding,
+   * high-return.
    */
   async getDashboardStats(dealerId: string) {
     const all = await this.list(dealerId);
@@ -250,6 +311,11 @@ export const supplierPerformanceService = {
       .sort((a, b) => b.outstanding_amount - a.outstanding_amount)
       .slice(0, 5);
 
+    const highReturn = active
+      .filter((s) => s.return_rate_pct >= 5)
+      .sort((a, b) => b.return_rate_pct - a.return_rate_pct)
+      .slice(0, 5);
+
     const delayedCount = active.filter(
       (s) => s.days_since_last_purchase !== null && s.days_since_last_purchase > 90,
     ).length;
@@ -260,11 +326,13 @@ export const supplierPerformanceService = {
       reliableCount: active.filter((s) => s.reliability_band === "reliable").length,
       atRiskCount: atRisk.length,
       delayedCount,
+      highReturnCount: highReturn.length,
       totalOutstanding:
         Math.round(active.reduce((sum, s) => sum + s.outstanding_amount, 0) * 100) / 100,
       topReliable,
       atRisk,
       highOutstanding,
+      highReturn,
     };
   },
 };
