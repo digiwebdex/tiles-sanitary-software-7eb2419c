@@ -289,6 +289,45 @@ const QuotationDetailDialog = ({ quotationId, open, onOpenChange }: Props) => {
           )}
         </div>
       </DialogContent>
+
+      {quotation && (
+        <SendWhatsAppDialog
+          open={waOpen}
+          onOpenChange={setWaOpen}
+          dealerId={dealerId}
+          messageType="quotation_share"
+          sourceType="quotation"
+          sourceId={quotation.id}
+          templateKey="quotation_share_v1"
+          defaultPhone={
+            quotation.customers?.phone ??
+            quotation.customer_phone_text ??
+            ""
+          }
+          defaultName={
+            quotation.customers?.name ??
+            quotation.customer_name_text ??
+            null
+          }
+          defaultMessage={buildQuotationMessage({
+            dealerName: dealerInfo?.name ?? "Our Store",
+            customerName:
+              quotation.customers?.name ?? quotation.customer_name_text ?? null,
+            quotationNo: formatQuotationDisplayNo(quotation),
+            totalAmount: Number(quotation.total_amount ?? 0),
+            validUntil: quotation.valid_until
+              ? fmtDate(quotation.valid_until)
+              : null,
+            itemCount: items.length,
+          })}
+          payloadSnapshot={{
+            quotation_no: formatQuotationDisplayNo(quotation),
+            total: Number(quotation.total_amount ?? 0),
+            items: items.length,
+          }}
+          title="Share Quotation via WhatsApp"
+        />
+      )}
     </Dialog>
   );
 };
