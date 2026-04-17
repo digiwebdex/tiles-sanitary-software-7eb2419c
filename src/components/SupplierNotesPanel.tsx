@@ -19,7 +19,7 @@ interface Props {
  */
 export function SupplierNotesPanel({ dealerId, supplierId }: Props) {
   const qc = useQueryClient();
-  const { isAdmin } = usePermissions();
+  const { canManageUsers: isAdmin } = usePermissions();
   const [draft, setDraft] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
