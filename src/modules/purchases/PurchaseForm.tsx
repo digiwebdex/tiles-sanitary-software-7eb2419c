@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
+import { SupplierAdvisoryHint } from "@/components/SupplierAdvisoryHint";
 
 interface LastPurchaseInfo {
   purchase_rate: number;
@@ -279,6 +280,9 @@ const PurchaseForm = ({ dealerId, showOfferPrice, onSubmit, isLoading }: Purchas
                 </FormItem>
               )}
             />
+            {watchSupplierId && (
+              <SupplierAdvisoryHint dealerId={dealerId} supplierId={watchSupplierId} />
+            )}
           </CardContent>
         </Card>
 
