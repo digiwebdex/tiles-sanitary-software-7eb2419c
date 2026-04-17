@@ -65,16 +65,20 @@ export interface DemandRow {
   incoming_qty: number;
   uncovered_gap: number;
   coverage_status: CoverageStatus;
-  coverage_ratio: number | null;     // incoming / need; null when need <= 0
+  coverage_ratio: number | null;
   sold_30d: number;
+  sold_60d: number;
   sold_90d: number;
   velocity_per_day: number;
+  velocity_trend: "rising" | "steady" | "falling" | "flat";
   days_of_cover: number | null;
   last_sale_date: string | null;
   days_since_last_sale: number | null;
   suggested_reorder_qty: number;
   flags: DemandFlag[];
   primary_flag: DemandFlag;
+  /** Owner-friendly reasons explaining why each non-OK flag fired. */
+  flag_reasons: string[];
 }
 
 export interface DemandStats {
@@ -86,9 +90,15 @@ export interface DemandStats {
   fastMovingCount: number;
   slowMovingCount: number;
   incomingCoverageProductCount: number;
-  uncoveredGapCount: number;       // products needing reorder where incoming doesn't cover
+  uncoveredGapCount: number;
   topCategoriesAtRisk: Array<{ key: string; count: number }>;
   topBrandsAtRisk: Array<{ key: string; count: number }>;
+  topWaitingProjects: Array<{
+    project_id: string;
+    project_name: string;
+    open_shortage: number;
+    days_waiting: number;
+  }>;
 }
 
 export interface DemandGroupRow {
@@ -104,6 +114,21 @@ export interface DemandGroupRow {
   incoming_total: number;
   open_shortage_total: number;
   uncovered_gap_total: number;
+}
+
+export interface ProjectDemandRow {
+  project_id: string;
+  project_name: string;
+  site_id: string | null;
+  site_name: string | null;
+  customer_id: string | null;
+  customer_name: string | null;
+  product_count: number;
+  open_shortage_total: number;
+  incoming_total: number;
+  uncovered_gap: number;
+  oldest_shortage_date: string | null;
+  days_waiting: number | null;
 }
 
 interface ProductLite {
@@ -213,7 +238,7 @@ async function loadShortageMap(dealerId: string, ids: string[]) {
   return m;
 }
 
-interface SalesAgg { sold30: number; sold90: number; lastSale: string | null }
+interface SalesAgg { sold30: number; sold60: number; sold90: number; lastSale: string | null }
 
 async function loadSalesMap(dealerId: string, ids: string[], settings: DemandPlanningSettings) {
   const m = new Map<string, SalesAgg>();
@@ -229,7 +254,9 @@ async function loadSalesMap(dealerId: string, ids: string[], settings: DemandPla
     .gte("sales.created_at", sinceLong);
   if (error) return m;
 
-  const cutoffShort = today().getTime() - settings.velocity_window_days * 86_400_000;
+  const now = today().getTime();
+  const cutoffShort = now - settings.velocity_window_days * 86_400_000;
+  const cutoff60 = now - 60 * 86_400_000;
   for (const row of (data ?? []) as Array<{
     product_id: string;
     quantity: number | string;
@@ -239,8 +266,9 @@ async function loadSalesMap(dealerId: string, ids: string[], settings: DemandPla
     if (!createdAt) continue;
     const ts = new Date(createdAt).getTime();
     const qty = Number(row.quantity ?? 0);
-    const cur = m.get(row.product_id) ?? { sold30: 0, sold90: 0, lastSale: null };
+    const cur = m.get(row.product_id) ?? { sold30: 0, sold60: 0, sold90: 0, lastSale: null };
     cur.sold90 += qty;
+    if (ts >= cutoff60) cur.sold60 += qty;
     if (ts >= cutoffShort) cur.sold30 += qty;
     if (!cur.lastSale || createdAt > cur.lastSale) cur.lastSale = createdAt;
     m.set(row.product_id, cur);
@@ -263,7 +291,7 @@ async function loadSalesMap(dealerId: string, ids: string[], settings: DemandPla
     if (cur) {
       if (!cur.lastSale || createdAt > cur.lastSale) cur.lastSale = createdAt;
     } else {
-      m.set(row.product_id, { sold30: 0, sold90: 0, lastSale: createdAt });
+      m.set(row.product_id, { sold30: 0, sold60: 0, sold90: 0, lastSale: createdAt });
     }
   }
   return m;
@@ -293,6 +321,7 @@ function classify(
   shortage: number,
   incoming: number,
   sold30: number,
+  sold60: number,
   sold90: number,
   lastSale: string | null,
   s: DemandPlanningSettings,
@@ -303,25 +332,63 @@ function classify(
   const sellable = Math.max(0, free - safety);
   const cover = velocity > 0 ? sellable / velocity : null;
 
+  // Velocity trend: compare last 30 days vs prior 30 (sold60 - sold30).
+  const prior30 = Math.max(0, sold60 - sold30);
+  let velocity_trend: "rising" | "steady" | "falling" | "flat" = "flat";
+  if (sold30 === 0 && prior30 === 0) {
+    velocity_trend = "flat";
+  } else if (prior30 === 0) {
+    velocity_trend = sold30 > 0 ? "rising" : "flat";
+  } else {
+    const ratio = sold30 / prior30;
+    if (ratio >= 1.25) velocity_trend = "rising";
+    else if (ratio <= 0.75) velocity_trend = "falling";
+    else velocity_trend = "steady";
+  }
+
   const flags: DemandFlag[] = [];
+  const reasons: string[] = [];
+
   if (velocity > 0 && (free <= safety || (cover !== null && cover < s.stockout_cover_days))) {
     flags.push("stockout_risk");
+    reasons.push(
+      cover !== null
+        ? `Only ~${cover.toFixed(1)} days of cover at current velocity (target ≥ ${s.stockout_cover_days}d).`
+        : `Free stock at or below safety cushion (${safety}).`,
+    );
   }
   if (velocity > 0 && free <= p.reorder_level + safety) {
     flags.push("low_stock");
+    reasons.push(`Free stock ${free} ≤ reorder level ${p.reorder_level} + safety ${safety}.`);
   }
   if (
     velocity > 0 &&
     (free <= p.reorder_level + safety || (cover !== null && cover < s.reorder_cover_days))
   ) {
     flags.push("reorder_suggested");
+    reasons.push(
+      cover !== null && cover < s.reorder_cover_days
+        ? `Cover ${cover.toFixed(1)}d is below reorder threshold (${s.reorder_cover_days}d).`
+        : `Free stock has reached the reorder line.`,
+    );
   }
-  if (sold30 >= s.fast_moving_30d_qty) flags.push("fast_moving");
-  if (sold90 > 0 && sold30 < s.slow_moving_30d_max) flags.push("slow_moving");
+  if (sold30 >= s.fast_moving_30d_qty) {
+    flags.push("fast_moving");
+    reasons.push(`Sold ${sold30} units in last 30d (≥ ${s.fast_moving_30d_qty}).`);
+  }
+  if (sold90 > 0 && sold30 < s.slow_moving_30d_max) {
+    flags.push("slow_moving");
+    reasons.push(`Only ${sold30} sold in last 30d (threshold < ${s.slow_moving_30d_max}).`);
+  }
 
   const daysSince = daysBetween(lastSale);
   if (totalStock > 0 && (daysSince === null || daysSince >= s.dead_stock_days) && sold90 === 0) {
     flags.push("dead_stock");
+    reasons.push(
+      daysSince === null
+        ? `Stock on hand but no sale ever recorded.`
+        : `${daysSince} days since last sale (dead after ${s.dead_stock_days}d).`,
+    );
   }
 
   const targetQty = Math.ceil(velocity * s.target_cover_days) + safety;
@@ -350,7 +417,8 @@ function classify(
 
   return {
     flags: flags.length ? flags : ["ok" as DemandFlag],
-    velocity, cover, suggested, safety,
+    reasons,
+    velocity, velocity_trend, cover, suggested, safety,
     coverage_status, coverage_ratio, uncovered_gap,
   };
 }
@@ -382,11 +450,11 @@ async function getDemandRows(dealerId: string): Promise<DemandRow[]> {
     const reserved = reservedMap.get(p.id) ?? 0;
     const shortage = shortageMap.get(p.id) ?? 0;
     const incoming = incomingMap.get(p.id) ?? 0;
-    const sales = salesMap.get(p.id) ?? { sold30: 0, sold90: 0, lastSale: null };
+    const sales = salesMap.get(p.id) ?? { sold30: 0, sold60: 0, sold90: 0, lastSale: null };
 
     const c = classify(
       p, total, reserved, shortage, incoming,
-      sales.sold30, sales.sold90, sales.lastSale, settings,
+      sales.sold30, sales.sold60, sales.sold90, sales.lastSale, settings,
     );
 
     return {
@@ -408,14 +476,17 @@ async function getDemandRows(dealerId: string): Promise<DemandRow[]> {
       coverage_status: c.coverage_status,
       coverage_ratio: c.coverage_ratio,
       sold_30d: sales.sold30,
+      sold_60d: sales.sold60,
       sold_90d: sales.sold90,
       velocity_per_day: Math.round(c.velocity * 100) / 100,
+      velocity_trend: c.velocity_trend,
       days_of_cover: c.cover === null ? null : Math.round(c.cover * 10) / 10,
       last_sale_date: sales.lastSale,
       days_since_last_sale: daysBetween(sales.lastSale),
       suggested_reorder_qty: c.suggested,
       flags: c.flags,
       primary_flag: pickPrimaryFlag(c.flags),
+      flag_reasons: c.reasons,
     };
   });
 }
@@ -451,9 +522,127 @@ function groupBy(
   );
 }
 
+/**
+ * Demand grouped by Project / Site (and customer).
+ *
+ * Aggregates *open shortages* (sale_items.backorder_qty - allocated_qty) for
+ * sales that are linked to a project. This is the practical project-driven
+ * demand signal — it reflects what the dealer has *promised* to a project
+ * and not yet covered.
+ *
+ * READ-ONLY. Advisory only. No purchase or stock side effects.
+ */
+async function getProjectDemandRows(dealerId: string): Promise<ProjectDemandRow[]> {
+  // Pull open backorder rows joined to their parent sale and (optional) project/site.
+  const { data, error } = await supabase
+    .from("sale_items")
+    .select(`
+      product_id, backorder_qty, allocated_qty,
+      sales!inner (
+        id, dealer_id, created_at, project_id, site_id, customer_id,
+        customers ( name ),
+        projects:project_id ( id, project_name ),
+        project_sites:site_id ( id, site_name )
+      )
+    `)
+    .eq("dealer_id", dealerId)
+    .gt("backorder_qty", 0);
+  if (error) return [];
+
+  type Agg = {
+    project_id: string;
+    project_name: string;
+    site_id: string | null;
+    site_name: string | null;
+    customer_id: string | null;
+    customer_name: string | null;
+    products: Set<string>;
+    open_shortage: number;
+    oldest: string | null;
+  };
+  const map = new Map<string, Agg>();
+
+  type RowShape = {
+    product_id: string;
+    backorder_qty: number | string;
+    allocated_qty: number | string;
+    sales: {
+      created_at: string;
+      project_id: string | null;
+      site_id: string | null;
+      customer_id: string | null;
+      customers: { name: string | null } | null;
+      projects: { id: string; project_name: string } | null;
+      project_sites: { id: string; site_name: string } | null;
+    } | null;
+  };
+
+  for (const row of (data ?? []) as unknown as RowShape[]) {
+    const open = Math.max(
+      0,
+      Number(row.backorder_qty ?? 0) - Number(row.allocated_qty ?? 0),
+    );
+    if (open <= 0) continue;
+    const s = row.sales;
+    if (!s || !s.project_id || !s.projects) continue; // project-linked only
+
+    const key = `${s.project_id}::${s.site_id ?? "_"}`;
+    const cur = map.get(key) ?? {
+      project_id: s.project_id,
+      project_name: s.projects.project_name,
+      site_id: s.site_id ?? null,
+      site_name: s.project_sites?.site_name ?? null,
+      customer_id: s.customer_id ?? null,
+      customer_name: s.customers?.name ?? null,
+      products: new Set<string>(),
+      open_shortage: 0,
+      oldest: null as string | null,
+    };
+    cur.products.add(row.product_id);
+    cur.open_shortage += open;
+    if (!cur.oldest || s.created_at < cur.oldest) cur.oldest = s.created_at;
+    map.set(key, cur);
+  }
+
+  if (map.size === 0) return [];
+
+  // Compute incoming for the union of products to estimate uncovered gap per row.
+  const allProductIds = Array.from(
+    new Set(Array.from(map.values()).flatMap((a) => Array.from(a.products))),
+  );
+  const settings = await getSettings(dealerId);
+  const incomingMap = await loadIncomingMap(dealerId, allProductIds, settings.incoming_window_days);
+
+  return Array.from(map.values())
+    .map((a) => {
+      const incoming = Array.from(a.products).reduce(
+        (sum, pid) => sum + (incomingMap.get(pid) ?? 0),
+        0,
+      );
+      return {
+        project_id: a.project_id,
+        project_name: a.project_name,
+        site_id: a.site_id,
+        site_name: a.site_name,
+        customer_id: a.customer_id,
+        customer_name: a.customer_name,
+        product_count: a.products.size,
+        open_shortage_total: a.open_shortage,
+        incoming_total: incoming,
+        uncovered_gap: Math.max(0, a.open_shortage - incoming),
+        oldest_shortage_date: a.oldest,
+        days_waiting: daysBetween(a.oldest),
+      };
+    })
+    .sort((x, y) => y.open_shortage_total - x.open_shortage_total);
+}
+
 async function getDashboardStats(dealerId: string): Promise<DemandStats> {
-  const rows = await getDemandRows(dealerId);
-  const products = await loadProducts(dealerId);
+  const [rows, products, projectRows] = await Promise.all([
+    getDemandRows(dealerId),
+    loadProducts(dealerId),
+    getProjectDemandRows(dealerId),
+  ]);
   const costMap = new Map(products.map((p) => [p.id, p.cost_price]));
 
   let deadValue = 0;
@@ -491,6 +680,24 @@ async function getDashboardStats(dealerId: string): Promise<DemandStats> {
       .slice(0, n)
       .map(([key, count]) => ({ key, count }));
 
+  // Roll up project-level shortages keyed by project (sites collapsed).
+  const projectAgg = new Map<string, { name: string; open: number; days: number }>();
+  for (const r of projectRows) {
+    const cur = projectAgg.get(r.project_id) ?? { name: r.project_name, open: 0, days: 0 };
+    cur.open += r.open_shortage_total;
+    cur.days = Math.max(cur.days, r.days_waiting ?? 0);
+    projectAgg.set(r.project_id, cur);
+  }
+  const topWaitingProjects = Array.from(projectAgg.entries())
+    .map(([project_id, v]) => ({
+      project_id,
+      project_name: v.name,
+      open_shortage: v.open,
+      days_waiting: v.days,
+    }))
+    .sort((a, b) => b.open_shortage - a.open_shortage)
+    .slice(0, 5);
+
   return {
     reorderNeededCount: reorder,
     lowStockCount: low,
@@ -503,12 +710,14 @@ async function getDashboardStats(dealerId: string): Promise<DemandStats> {
     uncoveredGapCount: gap,
     topCategoriesAtRisk: topN(byCategory),
     topBrandsAtRisk: topN(byBrand),
+    topWaitingProjects,
   };
 }
 
 export const demandPlanningService = {
   getDemandRows,
   getDashboardStats,
+  getProjectDemandRows,
   filter(rows: DemandRow[], flag: DemandFlag): DemandRow[] {
     return rows.filter((r) => r.flags.includes(flag));
   },

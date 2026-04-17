@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, Package, TrendingUp, Truck, Archive, Layers } from "lucide-react";
+import { AlertTriangle, Package, TrendingUp, Truck, Archive, Layers, Folder } from "lucide-react";
 import { demandPlanningService } from "@/services/demandPlanningService";
 import { demandPlanningSettingsService } from "@/services/demandPlanningSettingsService";
 import { formatCurrency } from "@/lib/utils";
@@ -122,7 +122,9 @@ export function DemandPlanningWidgets({ dealerId }: Props) {
         </Card>
       </div>
 
-      {(stats.topCategoriesAtRisk.length > 0 || stats.topBrandsAtRisk.length > 0) && (
+      {(stats.topCategoriesAtRisk.length > 0 ||
+        stats.topBrandsAtRisk.length > 0 ||
+        stats.topWaitingProjects.length > 0) && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -130,7 +132,7 @@ export function DemandPlanningWidgets({ dealerId }: Props) {
               Where the risk concentrates
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
             <div>
               <p className="font-semibold text-muted-foreground mb-1">Top categories at risk</p>
               {stats.topCategoriesAtRisk.length === 0 ? (
@@ -156,6 +158,29 @@ export function DemandPlanningWidgets({ dealerId }: Props) {
                     <li key={b.key} className="flex justify-between">
                       <span>{b.key}</span>
                       <span className="font-medium">{b.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <p className="font-semibold text-muted-foreground mb-1 flex items-center gap-1">
+                <Folder className="h-3 w-3" />
+                Top waiting projects
+              </p>
+              {stats.topWaitingProjects.length === 0 ? (
+                <p className="text-muted-foreground">No project-linked shortages.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {stats.topWaitingProjects.map((p) => (
+                    <li key={p.project_id} className="flex justify-between gap-2">
+                      <span className="truncate">{p.project_name}</span>
+                      <span className="font-medium whitespace-nowrap">
+                        {p.open_shortage}
+                        {p.days_waiting > 0 && (
+                          <span className="text-muted-foreground"> · {p.days_waiting}d</span>
+                        )}
+                      </span>
                     </li>
                   ))}
                 </ul>

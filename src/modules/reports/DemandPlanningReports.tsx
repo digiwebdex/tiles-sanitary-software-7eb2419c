@@ -16,6 +16,7 @@ import {
   type DemandRow,
   type DemandFlag,
   type DemandGroupRow,
+  type ProjectDemandRow,
 } from "@/services/demandPlanningService";
 import { demandPlanningSettingsService } from "@/services/demandPlanningSettingsService";
 
@@ -616,6 +617,130 @@ export function DemandByGroupReport({ dealerId }: Props) {
       </CardHeader>
       <CardContent>
         <GroupTable rows={groups} label={label} />
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Project / Site Demand Report ──────────────────────────────────
+export function ProjectDemandReport({ dealerId }: Props) {
+  const [search, setSearch] = useState("");
+  const { data: rows = [] } = useQuery({
+    queryKey: ["demand-planning-projects", dealerId],
+    queryFn: () => demandPlanningService.getProjectDemandRows(dealerId),
+    enabled: !!dealerId,
+    staleTime: 60_000,
+  });
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        r.project_name.toLowerCase().includes(q) ||
+        (r.site_name ?? "").toLowerCase().includes(q) ||
+        (r.customer_name ?? "").toLowerCase().includes(q),
+    );
+  }, [rows, search]);
+
+  const handleExport = () => {
+    exportToExcel(
+      filtered.map((r) => ({
+        Project: r.project_name,
+        Site: r.site_name ?? "—",
+        Customer: r.customer_name ?? "—",
+        Products: r.product_count,
+        Open_Shortage: r.open_shortage_total,
+        Incoming: r.incoming_total,
+        Uncovered_Gap: r.uncovered_gap,
+        Days_Waiting: r.days_waiting ?? 0,
+        Oldest_Date: r.oldest_shortage_date?.slice(0, 10) ?? "—",
+      })),
+      [
+        { key: "Project", header: "Project" },
+        { key: "Site", header: "Site" },
+        { key: "Customer", header: "Customer" },
+        { key: "Products", header: "Products", format: "number" },
+        { key: "Open_Shortage", header: "Open Shortage", format: "number" },
+        { key: "Incoming", header: "Incoming", format: "number" },
+        { key: "Uncovered_Gap", header: "Uncovered Gap", format: "number" },
+        { key: "Days_Waiting", header: "Days Waiting", format: "number" },
+        { key: "Oldest_Date", header: "Oldest Shortage" },
+      ],
+      "project-demand",
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-2">
+        <div>
+          <CardTitle>Project / Site Demand</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            Open shortages on sales linked to a project or site. Helps you see promised but
+            uncovered demand by project. Advisory only — does not create purchases.
+          </p>
+        </div>
+        <Button size="sm" variant="outline" onClick={handleExport} disabled={!filtered.length}>
+          Export
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <Input
+          placeholder="Search project, site or customer…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-xs mb-3"
+        />
+        <div className="rounded-md border overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Project</TableHead>
+                <TableHead>Site</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead className="text-right">Products</TableHead>
+                <TableHead className="text-right">Open Shortage</TableHead>
+                <TableHead className="text-right">Incoming</TableHead>
+                <TableHead className="text-right">Uncovered Gap</TableHead>
+                <TableHead className="text-right">Days Waiting</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    No project-linked shortages.
+                  </TableCell>
+                </TableRow>
+              )}
+              {filtered.map((r: ProjectDemandRow) => (
+                <TableRow key={`${r.project_id}-${r.site_id ?? "_"}`}>
+                  <TableCell className="font-medium">{r.project_name}</TableCell>
+                  <TableCell>{r.site_name ?? "—"}</TableCell>
+                  <TableCell>{r.customer_name ?? "—"}</TableCell>
+                  <TableCell className="text-right">{r.product_count}</TableCell>
+                  <TableCell className="text-right font-semibold text-destructive">
+                    {r.open_shortage_total}
+                  </TableCell>
+                  <TableCell className="text-right">{r.incoming_total || "—"}</TableCell>
+                  <TableCell className="text-right">
+                    {r.uncovered_gap > 0
+                      ? <span className="font-semibold text-destructive">{r.uncovered_gap}</span>
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {r.days_waiting !== null && r.days_waiting > 0 ? (
+                      <Badge variant={r.days_waiting >= 14 ? "destructive" : "outline"}>
+                        {r.days_waiting}d
+                      </Badge>
+                    ) : "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );
