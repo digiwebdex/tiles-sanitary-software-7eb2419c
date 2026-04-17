@@ -215,7 +215,7 @@ async function fetchLinksForSaleItems(
     .eq("dealer_id", dealerId)
     .in("sale_item_id", saleItemIds);
   if (error) throw new Error(error.message);
-  for (const r of (data ?? []) as ShortageLink[]) {
+  for (const r of ((data ?? []) as unknown) as ShortageLink[]) {
     const arr = map.get(r.sale_item_id) ?? [];
     arr.push(r);
     map.set(r.sale_item_id, arr);
