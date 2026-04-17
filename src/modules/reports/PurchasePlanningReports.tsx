@@ -126,8 +126,8 @@ export function PurchaseNeedByProductReport({ dealerId }: ReportProps) {
                     <TableHead>Brand</TableHead>
                     <TableHead>Unit</TableHead>
                     <TableHead className="text-center">Shortage</TableHead>
-                    <TableHead className="text-center">Open</TableHead>
-                    <TableHead className="text-center">Planned</TableHead>
+                    <TableHead className="text-center">Planned In</TableHead>
+                    <TableHead className="text-center">Net Uncovered</TableHead>
                     <TableHead className="text-center">Suggested</TableHead>
                     <TableHead className="text-center">Customers</TableHead>
                     <TableHead className="text-center">Oldest</TableHead>
