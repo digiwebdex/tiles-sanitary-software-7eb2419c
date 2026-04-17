@@ -667,7 +667,7 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
     setMixedBatchDialogOpen(false);
     if (pendingValues) {
       const hasReservations = Object.values(reservationSelections).some(arr => arr.length > 0);
-      await onSubmit({ ...pendingValues, mixed_batch_acknowledged: true, ...(hasReservations ? { reservation_selections: reservationSelections } : {}) } as any);
+      await onSubmit({ ...pendingValues, mixed_batch_acknowledged: true, commission, ...(hasReservations ? { reservation_selections: reservationSelections } : {}) } as any);
       setPendingValues(null);
       setMixedBatchInfo(null);
     }
@@ -1255,6 +1255,15 @@ const SaleForm = ({ dealerId, onSubmit, isLoading, defaultValues: dv, submitLabe
               </div>
             </div>
           )}
+
+          {/* Optional referral / commission */}
+          <SaleCommissionSection
+            dealerId={dealerId}
+            baseAmount={Math.max(0, totalAmount)}
+            value={commission}
+            onChange={setCommission}
+            disabled={priceLocked}
+          />
 
           {/* Submit + Reset */}
           <div className="flex items-center gap-3">
