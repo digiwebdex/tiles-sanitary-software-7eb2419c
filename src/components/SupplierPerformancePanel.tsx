@@ -127,7 +127,7 @@ export function SupplierPerformancePanel({ dealerId, supplierId }: Props) {
             {data.score_factors.join(" · ")}
           </div>
         ) : (
-          <div className="rounded-md border border-dashed bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
+          <div className="rounded-md border border-dashed bg-accent/30 px-3 py-2 text-xs text-foreground">
             Clean record — no penalties applied to score.
           </div>
         )}
