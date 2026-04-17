@@ -1,8 +1,8 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Printer, X, GitBranch, ShoppingCart, ExternalLink } from "lucide-react";
+import { Printer, X, GitBranch, ShoppingCart, ExternalLink, MessageCircle } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import { useDealerId } from "@/hooks/useDealerId";
 import QuotationDocument from "@/components/quotation/QuotationDocument";
 import { QuotationStatusBadge } from "@/components/quotation/QuotationStatusBadge";
 import { formatCurrency, parseLocalDate } from "@/lib/utils";
+import SendWhatsAppDialog from "@/components/whatsapp/SendWhatsAppDialog";
+import { buildQuotationMessage } from "@/services/whatsappService";
 
 interface Props {
   quotationId: string;
