@@ -166,20 +166,31 @@ export function CommissionLiabilityReport({ dealerId }: Props) {
     }
     exportToExcel(
       rows.map((r) => ({
-        Date: r.sales?.sale_date ?? r.created_at.slice(0, 10),
-        Invoice: r.sales?.invoice_number ?? "—",
-        Customer: r.sales?.customers?.name ?? "—",
-        Referrer: r.referral_sources?.name ?? "—",
-        Type: r.referral_sources?.source_type ?? "—",
-        "Commission Type": r.commission_type === "percent"
-          ? `${r.commission_value}%`
-          : "Fixed",
-        "Base Amount": Number(r.commission_base_amount),
-        Commission: Number(r.calculated_commission_amount),
-        Status: r.status,
-        Settled: Number(r.settled_amount) || 0,
-        "Settled At": r.settled_at ? r.settled_at.slice(0, 10) : "",
+        date: r.sales?.sale_date ?? r.created_at.slice(0, 10),
+        invoice: r.sales?.invoice_number ?? "—",
+        customer: r.sales?.customers?.name ?? "—",
+        referrer: r.referral_sources?.name ?? "—",
+        type: r.referral_sources?.source_type ?? "—",
+        commissionType: r.commission_type === "percent" ? `${r.commission_value}%` : "Fixed",
+        baseAmount: Number(r.commission_base_amount),
+        commission: Number(r.calculated_commission_amount),
+        status: r.status,
+        settled: Number(r.settled_amount) || 0,
+        settledAt: r.settled_at ? r.settled_at.slice(0, 10) : "",
       })),
+      [
+        { header: "Date", key: "date" },
+        { header: "Invoice", key: "invoice" },
+        { header: "Customer", key: "customer" },
+        { header: "Referrer", key: "referrer" },
+        { header: "Type", key: "type" },
+        { header: "Commission Type", key: "commissionType" },
+        { header: "Base Amount", key: "baseAmount", format: "currency" },
+        { header: "Commission", key: "commission", format: "currency" },
+        { header: "Status", key: "status" },
+        { header: "Settled", key: "settled", format: "currency" },
+        { header: "Settled At", key: "settledAt" },
+      ],
       `commissions-${status}-${new Date().toISOString().slice(0, 10)}`,
     );
   };
