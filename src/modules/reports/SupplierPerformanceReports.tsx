@@ -601,3 +601,103 @@ function SimpleSupplierTable({
     </Card>
   );
 }
+
+/* ─── Supplier Price Trend Report (Batch 3) ───────────────── */
+const TREND_LABEL: Record<PriceTrend, string> = {
+  rising: "Rising",
+  falling: "Falling",
+  stable: "Stable",
+  insufficient_data: "—",
+};
+
+function trendIcon(t: PriceTrend) {
+  if (t === "rising") return <TrendingUp className="h-3.5 w-3.5 text-destructive" />;
+  if (t === "falling") return <TrendingDown className="h-3.5 w-3.5 text-emerald-600" />;
+  return <Minus className="h-3.5 w-3.5 text-muted-foreground" />;
+}
+
+export function SupplierPriceTrendReport({ dealerId }: Props) {
+  const [filter, setFilter] = useState<PriceTrend | "all">("all");
+  const { data, isLoading } = useQuery({
+    queryKey: ["supplier-performance", dealerId],
+    queryFn: () => supplierPerformanceService.list(dealerId),
+    enabled: !!dealerId,
+  });
+
+  const rows = (data ?? [])
+    .filter((s) => s.trend_products_compared > 0)
+    .filter((s) => filter === "all" || s.price_trend === filter)
+    .sort((a, b) => Math.abs(b.price_change_pct) - Math.abs(a.price_change_pct));
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" /> Supplier Price Trend
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Compares each supplier's last unit rate against the average of prior rates per product. Trend is volume-weighted; bands: stable (&lt;3% drift), rising, falling.
+            </p>
+          </div>
+          <Select value={filter} onValueChange={(v) => setFilter(v as PriceTrend | "all")}>
+            <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All trends</SelectItem>
+              <SelectItem value="rising">Rising only</SelectItem>
+              <SelectItem value="falling">Falling only</SelectItem>
+              <SelectItem value="stable">Stable only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-muted-foreground">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-muted-foreground text-center py-8">
+            Need at least 2 purchases of the same product per supplier to compute trend.
+          </p>
+        ) : (
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Trend</TableHead>
+                  <TableHead className="text-right">Change %</TableHead>
+                  <TableHead className="text-right">Products Compared</TableHead>
+                  <TableHead className="text-right">Total Purchases</TableHead>
+                  <TableHead className="text-right">Last Purchase</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.supplier_id}>
+                    <TableCell className="font-medium">{r.supplier_name}</TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center gap-1.5">
+                        {trendIcon(r.price_trend)} {TREND_LABEL[r.price_trend]}
+                      </span>
+                    </TableCell>
+                    <TableCell className={`text-right font-semibold ${
+                      r.price_trend === "rising" ? "text-destructive" :
+                      r.price_trend === "falling" ? "text-emerald-700" : ""
+                    }`}>
+                      {r.price_change_pct > 0 ? "+" : ""}{r.price_change_pct.toFixed(2)}%
+                    </TableCell>
+                    <TableCell className="text-right">{r.trend_products_compared}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">{r.total_purchases}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">{r.last_purchase_date ?? "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
