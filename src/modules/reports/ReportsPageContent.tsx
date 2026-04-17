@@ -103,6 +103,7 @@ import {
   SupplierExposureReport,
   SupplierLeadTimeReport,
   SupplierReturnReport,
+  HighReturnSuppliersReport,
 } from "./SupplierPerformanceReports";
 import { cn } from "@/lib/utils";
 import {
@@ -285,8 +286,9 @@ const reportGroups = [
     icon: Truck,
     items: [
       { key: "supplier-performance", label: "Supplier Performance", icon: ShieldCheck },
-      { key: "supplier-lead-time", label: "Supply Cadence", icon: Clock },
+      { key: "supplier-lead-time", label: "Lead Time / Cadence", icon: Clock },
       { key: "supplier-returns", label: "Returns / Damage", icon: AlertTriangle },
+      { key: "supplier-high-return", label: "High Return Rate", icon: AlertTriangle },
       { key: "supplier-exposure", label: "Outstanding Exposure", icon: Wallet },
       { key: "supplier-top-reliable", label: "Top Reliable", icon: ShieldCheck },
       { key: "supplier-at-risk", label: "At-Risk", icon: AlertTriangle },
@@ -387,6 +389,7 @@ const ReportsPageContent = ({ dealerId }: ReportsPageContentProps) => {
       case "supplier-performance": return <SupplierPerformanceReport dealerId={dealerId} />;
       case "supplier-lead-time": return <SupplierLeadTimeReport dealerId={dealerId} />;
       case "supplier-returns": return <SupplierReturnReport dealerId={dealerId} />;
+      case "supplier-high-return": return <HighReturnSuppliersReport dealerId={dealerId} />;
       case "supplier-exposure": return <SupplierExposureReport dealerId={dealerId} />;
       case "supplier-top-reliable": return <TopReliableSuppliersReport dealerId={dealerId} />;
       case "supplier-at-risk": return <AtRiskSuppliersReport dealerId={dealerId} />;

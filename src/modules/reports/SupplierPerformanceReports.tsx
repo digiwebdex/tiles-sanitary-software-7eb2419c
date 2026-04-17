@@ -46,15 +46,24 @@ export function ReliabilityBadge({ band }: { band: ReliabilityBand }) {
   );
 }
 
+type QuickFilter = "all" | "delayed" | "high_return" | "high_outstanding";
+
 /* ─── Supplier Performance Report (main) ────────────────────── */
 export function SupplierPerformanceReport({ dealerId }: Props) {
   const { canExportReports } = usePermissions();
   const [search, setSearch] = useState("");
   const [band, setBand] = useState<ReliabilityBand | "all">("all");
+  const [quick, setQuick] = useState<QuickFilter>("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["supplier-performance", dealerId],
-    queryFn: () => supplierPerformanceService.list(dealerId),
+    queryKey: ["supplier-performance", dealerId, startDate, endDate],
+    queryFn: () =>
+      supplierPerformanceService.list(dealerId, {
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      }),
     enabled: !!dealerId,
   });
 
@@ -62,83 +71,125 @@ export function SupplierPerformanceReport({ dealerId }: Props) {
     const all = data ?? [];
     return all.filter((r) => {
       if (band !== "all" && r.reliability_band !== band) return false;
+      if (quick === "delayed" && !(r.days_since_last_purchase !== null && r.days_since_last_purchase > 90)) return false;
+      if (quick === "high_return" && r.return_rate_pct < 5) return false;
+      if (quick === "high_outstanding" && !(r.outstanding_amount > 0 && r.avg_purchase_value > 0 && r.outstanding_amount > r.avg_purchase_value * 5)) return false;
       if (search.trim()) {
         const s = search.toLowerCase();
         if (!r.supplier_name.toLowerCase().includes(s)) return false;
       }
       return true;
     });
-  }, [data, band, search]);
+  }, [data, band, quick, search]);
 
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-3 pb-2 md:flex-row md:items-center md:justify-between">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Truck className="h-4 w-4" /> Supplier Performance
-        </CardTitle>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      <CardHeader className="flex flex-col gap-3 pb-2">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Truck className="h-4 w-4" /> Supplier Performance
+          </CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search supplier…"
+                className="h-9 w-44 pl-7"
+              />
+            </div>
             <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search supplier…"
-              className="h-9 w-44 pl-7"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="h-9 w-36"
+              placeholder="From"
             />
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="h-9 w-36"
+              placeholder="To"
+            />
+            <Select value={band} onValueChange={(v) => setBand(v as ReliabilityBand | "all")}>
+              <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All bands</SelectItem>
+                <SelectItem value="reliable">Reliable</SelectItem>
+                <SelectItem value="average">Average</SelectItem>
+                <SelectItem value="at_risk">At-Risk</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={quick} onValueChange={(v) => setQuick(v as QuickFilter)}>
+              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All suppliers</SelectItem>
+                <SelectItem value="delayed">Delayed (90d+)</SelectItem>
+                <SelectItem value="high_return">High return ≥5%</SelectItem>
+                <SelectItem value="high_outstanding">High exposure</SelectItem>
+              </SelectContent>
+            </Select>
+            {canExportReports && rows.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  exportToExcel(
+                    rows.map((r) => ({
+                      supplier: r.supplier_name,
+                      band: BAND_LABEL[r.reliability_band],
+                      score: r.reliability_score,
+                      score_factors: r.score_factors.join(" | ") || "clean",
+                      purchases: r.total_purchases,
+                      purchase_value: r.total_purchase_value,
+                      avg_value: r.avg_purchase_value,
+                      last_purchase: r.last_purchase_date ?? "—",
+                      days_since: r.days_since_last_purchase ?? "—",
+                      avg_gap: r.avg_days_between_purchases ?? "—",
+                      last_gap: r.last_gap_days ?? "—",
+                      longest_gap: r.longest_gap_days ?? "—",
+                      on_time: r.on_time_count,
+                      delayed: r.delayed_count,
+                      delayed_pct: r.delayed_pct,
+                      returns: r.total_returns,
+                      return_value: r.total_return_value,
+                      return_rate: r.return_rate_pct,
+                      outstanding: r.outstanding_amount,
+                      recent_30d: r.recent_purchase_value_30d,
+                    })),
+                    [
+                      { header: "Supplier", key: "supplier" },
+                      { header: "Band", key: "band" },
+                      { header: "Score", key: "score", format: "number" },
+                      { header: "Score Factors", key: "score_factors" },
+                      { header: "Purchases", key: "purchases", format: "number" },
+                      { header: "Total Value", key: "purchase_value", format: "currency" },
+                      { header: "Avg Value", key: "avg_value", format: "currency" },
+                      { header: "Last Purchase", key: "last_purchase" },
+                      { header: "Days Since", key: "days_since" },
+                      { header: "Avg Gap (d)", key: "avg_gap" },
+                      { header: "Last Gap (d)", key: "last_gap" },
+                      { header: "Longest Gap (d)", key: "longest_gap" },
+                      { header: "On-Time", key: "on_time", format: "number" },
+                      { header: "Delayed", key: "delayed", format: "number" },
+                      { header: "Delayed %", key: "delayed_pct", format: "number" },
+                      { header: "Returns", key: "returns", format: "number" },
+                      { header: "Return Value", key: "return_value", format: "currency" },
+                      { header: "Return Rate %", key: "return_rate", format: "number" },
+                      { header: "Outstanding", key: "outstanding", format: "currency" },
+                      { header: "30d Spend", key: "recent_30d", format: "currency" },
+                    ],
+                    "supplier-performance",
+                  )
+                }
+              >
+                <Download className="h-4 w-4 mr-1" /> Export
+              </Button>
+            )}
           </div>
-          <Select value={band} onValueChange={(v) => setBand(v as ReliabilityBand | "all")}>
-            <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All bands</SelectItem>
-              <SelectItem value="reliable">Reliable</SelectItem>
-              <SelectItem value="average">Average</SelectItem>
-              <SelectItem value="at_risk">At-Risk</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
-          {canExportReports && rows.length > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                exportToExcel(
-                  rows.map((r) => ({
-                    supplier: r.supplier_name,
-                    band: BAND_LABEL[r.reliability_band],
-                    score: r.reliability_score,
-                    purchases: r.total_purchases,
-                    purchase_value: r.total_purchase_value,
-                    avg_value: r.avg_purchase_value,
-                    last_purchase: r.last_purchase_date ?? "—",
-                    days_since: r.days_since_last_purchase ?? "—",
-                    avg_gap: r.avg_days_between_purchases ?? "—",
-                    returns: r.total_returns,
-                    return_value: r.total_return_value,
-                    return_rate: r.return_rate_pct,
-                    outstanding: r.outstanding_amount,
-                  })),
-                  [
-                    { header: "Supplier", key: "supplier" },
-                    { header: "Band", key: "band" },
-                    { header: "Score", key: "score", format: "number" },
-                    { header: "Purchases", key: "purchases", format: "number" },
-                    { header: "Total Value", key: "purchase_value", format: "currency" },
-                    { header: "Avg Value", key: "avg_value", format: "currency" },
-                    { header: "Last Purchase", key: "last_purchase" },
-                    { header: "Days Since", key: "days_since" },
-                    { header: "Avg Gap (days)", key: "avg_gap" },
-                    { header: "Returns", key: "returns", format: "number" },
-                    { header: "Return Value", key: "return_value", format: "currency" },
-                    { header: "Return Rate %", key: "return_rate", format: "number" },
-                    { header: "Outstanding", key: "outstanding", format: "currency" },
-                  ],
-                  "supplier-performance",
-                )
-              }
-            >
-              <Download className="h-4 w-4 mr-1" /> Export
-            </Button>
-          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -158,6 +209,7 @@ export function SupplierPerformanceReport({ dealerId }: Props) {
                   <TableHead className="text-right">Total Value</TableHead>
                   <TableHead className="text-right">Return %</TableHead>
                   <TableHead className="text-right">Avg Gap</TableHead>
+                  <TableHead className="text-right">Delayed %</TableHead>
                   <TableHead className="text-right">Last Purchase</TableHead>
                   <TableHead className="text-right">Outstanding</TableHead>
                 </TableRow>
@@ -165,7 +217,14 @@ export function SupplierPerformanceReport({ dealerId }: Props) {
               <TableBody>
                 {rows.map((r) => (
                   <TableRow key={r.supplier_id}>
-                    <TableCell className="font-medium">{r.supplier_name}</TableCell>
+                    <TableCell className="font-medium">
+                      {r.supplier_name}
+                      {r.score_factors.length > 0 && (
+                        <span className="block text-[10px] text-muted-foreground italic">
+                          {r.score_factors.slice(0, 2).join(" · ")}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell><ReliabilityBadge band={r.reliability_band} /></TableCell>
                     <TableCell className="text-right font-semibold">{r.reliability_score}</TableCell>
                     <TableCell className="text-right">{r.total_purchases}</TableCell>
@@ -175,6 +234,9 @@ export function SupplierPerformanceReport({ dealerId }: Props) {
                     </TableCell>
                     <TableCell className="text-right">
                       {r.avg_days_between_purchases !== null ? `${r.avg_days_between_purchases}d` : "—"}
+                    </TableCell>
+                    <TableCell className={`text-right ${r.delayed_pct > 30 ? "text-destructive font-semibold" : ""}`}>
+                      {r.on_time_count + r.delayed_count > 0 ? `${r.delayed_pct}%` : "—"}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">
                       {r.last_purchase_date ?? "—"}
@@ -283,10 +345,10 @@ export function SupplierLeadTimeReport({ dealerId }: Props) {
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
-          <Clock className="h-4 w-4" /> Supplier Supply Cadence
+          <Clock className="h-4 w-4" /> Supplier Lead Time / Cadence
         </CardTitle>
         <p className="text-xs text-muted-foreground">
-          Average days between consecutive purchases — a practical proxy for supplier responsiveness.
+          Average days between consecutive purchases. A gap is flagged "delayed" when it exceeds the supplier's own median cadence × 1.5 (with a 7-day floor).
         </p>
       </CardHeader>
       <CardContent>
@@ -303,8 +365,12 @@ export function SupplierLeadTimeReport({ dealerId }: Props) {
                 <TableRow>
                   <TableHead>Supplier</TableHead>
                   <TableHead className="text-right">Purchases</TableHead>
-                  <TableHead className="text-right">Avg Gap (days)</TableHead>
-                  <TableHead className="text-right">Last Purchase</TableHead>
+                  <TableHead className="text-right">Avg Gap</TableHead>
+                  <TableHead className="text-right">Last Gap</TableHead>
+                  <TableHead className="text-right">Longest Gap</TableHead>
+                  <TableHead className="text-right">On-Time</TableHead>
+                  <TableHead className="text-right">Delayed</TableHead>
+                  <TableHead className="text-right">Delayed %</TableHead>
                   <TableHead className="text-right">Days Since</TableHead>
                 </TableRow>
               </TableHeader>
@@ -316,11 +382,85 @@ export function SupplierLeadTimeReport({ dealerId }: Props) {
                     <TableCell className="text-right font-semibold">
                       {r.avg_days_between_purchases}d
                     </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {r.last_purchase_date ?? "—"}
+                    <TableCell className="text-right">
+                      {r.last_gap_days !== null ? `${r.last_gap_days}d` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {r.longest_gap_days !== null ? `${r.longest_gap_days}d` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">{r.on_time_count}</TableCell>
+                    <TableCell className={`text-right ${r.delayed_count > 0 ? "text-amber-700 font-medium" : "text-muted-foreground"}`}>
+                      {r.delayed_count}
+                    </TableCell>
+                    <TableCell className={`text-right font-semibold ${r.delayed_pct > 30 ? "text-destructive" : ""}`}>
+                      {r.delayed_pct}%
                     </TableCell>
                     <TableCell className={`text-right ${(r.days_since_last_purchase ?? 0) > 90 ? "text-destructive font-medium" : ""}`}>
                       {r.days_since_last_purchase !== null ? `${r.days_since_last_purchase}d` : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── Suppliers with High Return Rate (Batch 2) ───────────── */
+export function HighReturnSuppliersReport({ dealerId }: Props) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["supplier-performance", dealerId],
+    queryFn: () => supplierPerformanceService.list(dealerId),
+    enabled: !!dealerId,
+  });
+
+  const rows = (data ?? [])
+    .filter((s) => s.return_rate_pct >= 5)
+    .sort((a, b) => b.return_rate_pct - a.return_rate_pct);
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive" /> Suppliers with High Return Rate (≥5%)
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Suppliers whose return value crosses 5% of their total purchase value — review quality or terms.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-muted-foreground">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-muted-foreground text-center py-8">No suppliers with high return rate. Clean run.</p>
+        ) : (
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Band</TableHead>
+                  <TableHead className="text-right">Returns</TableHead>
+                  <TableHead className="text-right">Return Value</TableHead>
+                  <TableHead className="text-right">Return Rate %</TableHead>
+                  <TableHead className="text-right">Total Purchases</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.supplier_id}>
+                    <TableCell className="font-medium">{r.supplier_name}</TableCell>
+                    <TableCell><ReliabilityBadge band={r.reliability_band} /></TableCell>
+                    <TableCell className="text-right">{r.total_returns}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(r.total_return_value)}</TableCell>
+                    <TableCell className="text-right font-semibold text-destructive">
+                      {r.return_rate_pct.toFixed(2)}%
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {formatCurrency(r.total_purchase_value)}
                     </TableCell>
                   </TableRow>
                 ))}
