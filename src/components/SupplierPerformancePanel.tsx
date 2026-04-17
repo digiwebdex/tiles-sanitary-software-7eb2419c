@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Truck, ShoppingCart, Wallet, AlertTriangle, Clock, TrendingUp,
+  Truck, ShoppingCart, Wallet, AlertTriangle, Clock, TrendingUp, TrendingDown, Minus,
 } from "lucide-react";
-import { supplierPerformanceService } from "@/services/supplierPerformanceService";
+import { supplierPerformanceService, type PriceTrend } from "@/services/supplierPerformanceService";
 import { formatCurrency } from "@/lib/utils";
 import { ReliabilityBadge } from "@/modules/reports/SupplierPerformanceReports";
 
