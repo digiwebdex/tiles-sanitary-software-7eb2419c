@@ -56,7 +56,7 @@ function validate(s: Omit<DemandPlanningSettings, "dealer_id">): string | null {
     const v = s[key];
     const { min, max } = DEMAND_PLANNING_LIMITS[key];
     if (!Number.isFinite(v) || !Number.isInteger(v) || v < min || v > max) {
-      return `${key.replaceAll("_", " ")} must be an integer between ${min} and ${max}`;
+      return `${String(key).replace(/_/g, " ")} must be an integer between ${min} and ${max}`;
     }
   }
   if (s.stockout_cover_days >= s.reorder_cover_days) {
