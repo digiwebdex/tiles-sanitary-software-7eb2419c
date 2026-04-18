@@ -280,21 +280,40 @@ const WhatsAppLogsPage = () => {
                         {r.error_message ?? ""}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          title="Re-open in WhatsApp"
-                          onClick={() =>
-                            window.open(
-                              buildWaLink(r.recipient_phone, r.message_text),
-                              "_blank",
-                              "noopener,noreferrer"
-                            )
-                          }
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-7 w-7">
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                              onClick={() =>
+                                window.open(
+                                  buildWaLink(r.recipient_phone, r.message_text),
+                                  "_blank",
+                                  "noopener,noreferrer"
+                                )
+                              }
+                            >
+                              <ExternalLink className="mr-2 h-4 w-4" /> Retry / Re-open
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              disabled={r.status === "sent" || markSent.isPending}
+                              onClick={() => markSent.mutate(r.id)}
+                            >
+                              <CheckCircle2 className="mr-2 h-4 w-4 text-primary" /> Mark Sent
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={r.status === "failed" || markFailed.isPending}
+                              onClick={() => markFailed.mutate(r.id)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <XCircle className="mr-2 h-4 w-4" /> Mark Failed
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
