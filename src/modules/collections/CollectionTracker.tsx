@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Search, Wallet, AlertTriangle, CheckCircle, DollarSign, TrendingDown, CalendarIcon, X, Download, Printer, MessageSquare, BookOpen, Clock, MessageSquareText } from "lucide-react";
+import { Search, Wallet, AlertTriangle, CheckCircle, DollarSign, TrendingDown, CalendarIcon, X, Download, Printer, MessageSquare, BookOpen, Clock, MessageSquareText, MessageCircle } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
@@ -25,6 +25,8 @@ import PaymentReceipt from "./PaymentReceipt";
 import FollowUpPanel from "./FollowUpPanel";
 import { notificationService } from "@/services/notificationService";
 import { useDealerInfo } from "@/hooks/useDealerInfo";
+import SendWhatsAppDialog from "@/components/whatsapp/SendWhatsAppDialog";
+import { buildPaymentReceiptMessage, buildOverdueReminderMessage } from "@/services/whatsappService";
 
 interface CustomerOutstanding {
   id: string;
