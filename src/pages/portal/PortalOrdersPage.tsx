@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -19,8 +21,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
-import { listPortalSales } from "@/services/portalService";
+import { listPortalSales, type PortalSale } from "@/services/portalService";
 import { PortalListSkeleton } from "./PortalLayout";
+import PortalRequestDialog from "./PortalRequestDialog";
+import { Download, RefreshCw, ShoppingBag } from "lucide-react";
 
 const fmtBDT = (n: number) =>
   `৳${Number(n ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -34,6 +38,7 @@ export default function PortalOrdersPage() {
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
   const [onlyDue, setOnlyDue] = useState<string>("all");
+  const [reorderSale, setReorderSale] = useState<PortalSale | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["portal", "sales", customerId],
@@ -108,7 +113,14 @@ export default function PortalOrdersPage() {
         {isLoading ? (
           <PortalListSkeleton />
         ) : filtered.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No orders match.</p>
+          <div className="text-center py-8 space-y-2">
+            <ShoppingBag className="h-10 w-10 mx-auto text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              {(data ?? []).length === 0
+                ? "No orders yet. Once your dealer creates an invoice, it'll appear here."
+                : "No orders match the current filters."}
+            </p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -120,6 +132,7 @@ export default function PortalOrdersPage() {
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead className="text-right">Paid</TableHead>
                   <TableHead className="text-right">Balance</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -137,6 +150,23 @@ export default function PortalOrdersPage() {
                     <TableCell className={`text-right ${(s.due_amount ?? 0) > 0 ? "text-destructive font-semibold" : ""}`}>
                       {fmtBDT(s.due_amount ?? 0)}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button asChild size="sm" variant="ghost" title="Download invoice">
+                          <Link to={`/portal/invoice/${s.id}`}>
+                            <Download className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Request reorder"
+                          onClick={() => setReorderSale(s)}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -144,6 +174,16 @@ export default function PortalOrdersPage() {
           </div>
         )}
       </CardContent>
+
+      {reorderSale && (
+        <PortalRequestDialog
+          open={!!reorderSale}
+          onOpenChange={(o) => !o && setReorderSale(null)}
+          requestType="reorder"
+          sourceSaleId={reorderSale.id}
+          prefillFromSale
+        />
+      )}
     </Card>
   );
 }
