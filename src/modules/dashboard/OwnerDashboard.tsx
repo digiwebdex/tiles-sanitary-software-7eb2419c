@@ -36,6 +36,7 @@ import { CommissionDashboardWidgets } from "@/components/CommissionDashboardWidg
 import { DisplaySampleDashboardWidgets } from "@/components/DisplaySampleDashboardWidgets";
 import { SupplierPerformanceWidgets } from "@/components/SupplierPerformanceWidgets";
 import { DemandPlanningWidgets } from "@/components/DemandPlanningWidgets";
+import { WhatsAppDashboardWidgets } from "@/components/whatsapp/WhatsAppDashboardWidgets";
 
 interface OwnerDashboardProps {
   dealerId: string;
@@ -567,6 +568,9 @@ const OwnerDashboard = ({ dealerId }: OwnerDashboardProps) => {
 
       {/* Demand Planning / Reorder Intelligence Widgets */}
       <DemandPlanningWidgets dealerId={dealerId} />
+
+      {/* WhatsApp Automation Widgets (last 7 days) */}
+      <WhatsAppDashboardWidgets dealerId={dealerId} />
 
       {/* Top Overdue Customers Widget */}
       {topOverdue.length > 0 && (
