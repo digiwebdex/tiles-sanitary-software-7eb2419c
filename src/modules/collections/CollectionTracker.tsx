@@ -385,6 +385,33 @@ export default function CollectionTracker({ dealerId }: { dealerId: string }) {
                         <MessageSquare className="h-3 w-3" />
                       </Button>
                     )}
+                    {c.phone && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title="WhatsApp overdue reminder"
+                        onClick={() =>
+                          setWaDialog({
+                            type: "overdue_reminder",
+                            phone: c.phone!,
+                            name: c.name,
+                            sourceId: c.id,
+                            message: buildOverdueReminderMessage({
+                              dealerName: dealerInfo?.name ?? "Your Business",
+                              dealerPhone: dealerInfo?.phone ?? null,
+                              customerName: c.name,
+                              outstanding: c.outstanding,
+                              daysOverdue: c.daysOverdue,
+                              oldestInvoiceDate: c.oldestSaleDate
+                                ? format(new Date(c.oldestSaleDate), "dd MMM yyyy")
+                                : null,
+                            }),
+                          })
+                        }
+                      >
+                        <MessageCircle className="h-3 w-3" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
