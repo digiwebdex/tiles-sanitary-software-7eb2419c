@@ -638,8 +638,32 @@ export default function CollectionTracker({ dealerId }: { dealerId: string }) {
               />
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="gap-2 flex-wrap sm:flex-nowrap">
             <Button variant="outline" onClick={() => setReceiptData(null)}>Close</Button>
+            {receiptData?.customerPhone && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (!receiptData) return;
+                  setWaDialog({
+                    type: "payment_receipt",
+                    phone: receiptData.customerPhone!,
+                    name: receiptData.customerName,
+                    sourceId: null,
+                    message: buildPaymentReceiptMessage({
+                      dealerName: dealerInfo?.name ?? "Your Business",
+                      customerName: receiptData.customerName,
+                      receiptNo: receiptData.receiptNo,
+                      amount: receiptData.amount,
+                      remainingDue: receiptData.remainingDue,
+                      date: format(new Date(receiptData.date), "dd MMM yyyy"),
+                    }),
+                  });
+                }}
+              >
+                <MessageCircle className="h-4 w-4 mr-1" /> Send via WhatsApp
+              </Button>
+            )}
             <Button onClick={() => {
               const content = receiptRef.current;
               if (!content) return;
