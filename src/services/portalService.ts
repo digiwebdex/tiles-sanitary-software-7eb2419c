@@ -267,6 +267,7 @@ export interface PortalDelivery {
   delivery_date: string;
   status: string | null;
   sale_id: string | null;
+  challan_id: string | null;
   receiver_name: string | null;
   delivery_address: string | null;
   notes: string | null;
@@ -285,7 +286,7 @@ export async function listPortalDeliveries(customerId: string): Promise<PortalDe
   const { data, error } = await supabase
     .from("deliveries")
     .select(
-      "id, delivery_no, delivery_date, status, sale_id, receiver_name, delivery_address, notes"
+      "id, delivery_no, delivery_date, status, sale_id, challan_id, receiver_name, delivery_address, notes"
     )
     .in("sale_id", saleIds)
     .order("delivery_date", { ascending: false });

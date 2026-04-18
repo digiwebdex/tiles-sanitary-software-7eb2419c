@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -21,9 +23,21 @@ import {
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { listPortalQuotations } from "@/services/portalService";
 import { PortalListSkeleton } from "./PortalLayout";
+import PortalRequestDialog from "./PortalRequestDialog";
+import { Download, FileText, Plus } from "lucide-react";
 
 const fmtBDT = (n: number) =>
   `৳${Number(n ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+interface QuotationRow {
+  id: string;
+  quotation_no: string;
+  revision_no: number;
+  quote_date: string;
+  valid_until: string;
+  status: string;
+  total_amount: number;
+}
 
 export default function PortalQuotationsPage() {
   const { context } = usePortalAuth();
@@ -33,6 +47,7 @@ export default function PortalQuotationsPage() {
   const [status, setStatus] = useState<string>("all");
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
+  const [requestOpen, setRequestOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["portal", "quotations", customerId],
@@ -40,8 +55,8 @@ export default function PortalQuotationsPage() {
     enabled: !!customerId,
   });
 
-  const filtered = useMemo(() => {
-    const rows = data ?? [];
+  const filtered = useMemo<QuotationRow[]>(() => {
+    const rows = (data ?? []) as QuotationRow[];
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
       if (status !== "all" && r.status !== status) return false;
@@ -57,6 +72,9 @@ export default function PortalQuotationsPage() {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <CardTitle>My Quotations</CardTitle>
+          <Button size="sm" onClick={() => setRequestOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Request quote
+          </Button>
         </div>
         <div className="flex gap-2 flex-wrap pt-2">
           <Input
@@ -99,7 +117,19 @@ export default function PortalQuotationsPage() {
         {isLoading ? (
           <PortalListSkeleton />
         ) : filtered.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No quotations match.</p>
+          <div className="text-center py-8 space-y-2">
+            <FileText className="h-10 w-10 mx-auto text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              {(data ?? []).length === 0
+                ? "No quotations yet. Request a quote and your dealer will share one."
+                : "No quotations match the current filters."}
+            </p>
+            {(data ?? []).length === 0 && (
+              <Button variant="outline" size="sm" onClick={() => setRequestOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" /> Request a quote
+              </Button>
+            )}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -110,6 +140,7 @@ export default function PortalQuotationsPage() {
                   <TableHead>Valid until</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -129,6 +160,13 @@ export default function PortalQuotationsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">{fmtBDT(q.total_amount)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button asChild size="sm" variant="ghost" title="Download quotation">
+                        <Link to={`/portal/quotation/${q.id}`}>
+                          <Download className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -136,6 +174,12 @@ export default function PortalQuotationsPage() {
           </div>
         )}
       </CardContent>
+
+      <PortalRequestDialog
+        open={requestOpen}
+        onOpenChange={setRequestOpen}
+        requestType="quote"
+      />
     </Card>
   );
 }

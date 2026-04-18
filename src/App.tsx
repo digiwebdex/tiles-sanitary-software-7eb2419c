@@ -78,6 +78,9 @@ import PortalProjectsPage from "./pages/portal/PortalProjectsPage";
 import PortalProjectDetailPage from "./pages/portal/PortalProjectDetailPage";
 import PortalLedgerPage from "./pages/portal/PortalLedgerPage";
 import PortalAccountPage from "./pages/portal/PortalAccountPage";
+import PortalRequestsPage from "./pages/portal/PortalRequestsPage";
+import PortalDocumentPage from "./pages/portal/PortalDocumentPage";
+import PortalRequestsAdminPage from "./pages/admin/PortalRequestsAdminPage";
 
 const IS_PRODUCTION = import.meta.env.PROD;
 
@@ -175,6 +178,7 @@ const App = () => (
             <Route path="/display-sample" element={<ProtectedRoute><AppLayout><DisplaySampleStockPage /></AppLayout></ProtectedRoute>} />
             <Route path="/whatsapp-logs" element={<ProtectedRoute><AppLayout><WhatsAppLogsPage /></AppLayout></ProtectedRoute>} />
             <Route path="/admin/portal-users" element={<ProtectedRoute><AppLayout><PortalUsersPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/admin/portal-requests" element={<ProtectedRoute><AppLayout><PortalRequestsAdminPage /></AppLayout></ProtectedRoute>} />
 
             {/* Customer / Contractor Portal (external users) */}
             <Route path="/portal/login" element={<PortalLoginPage />} />
@@ -187,7 +191,11 @@ const App = () => (
               <Route path="projects" element={<PortalProjectsPage />} />
               <Route path="projects/:id" element={<PortalProjectDetailPage />} />
               <Route path="statement" element={<PortalLedgerPage />} />
+              <Route path="requests" element={<PortalRequestsPage />} />
               <Route path="account" element={<PortalAccountPage />} />
+              <Route path="quotation/:id" element={<PortalDocumentPage kind="quotation" />} />
+              <Route path="invoice/:id" element={<PortalDocumentPage kind="invoice" />} />
+              <Route path="challan/:id" element={<PortalDocumentPage kind="challan" />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

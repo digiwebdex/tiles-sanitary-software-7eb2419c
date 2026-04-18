@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -21,6 +23,7 @@ import {
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { listPortalDeliveries } from "@/services/portalService";
 import { PortalListSkeleton } from "./PortalLayout";
+import { Download, MessageCircle, Truck } from "lucide-react";
 
 export default function PortalDeliveriesPage() {
   const { context } = usePortalAuth();
@@ -96,7 +99,14 @@ export default function PortalDeliveriesPage() {
         {isLoading ? (
           <PortalListSkeleton />
         ) : filtered.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No deliveries match.</p>
+          <div className="text-center py-8 space-y-2">
+            <Truck className="h-10 w-10 mx-auto text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              {(data ?? []).length === 0
+                ? "No deliveries yet. Updates will appear here when your dealer dispatches items."
+                : "No deliveries match the current filters."}
+            </p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -107,6 +117,7 @@ export default function PortalDeliveriesPage() {
                   <TableHead>Date</TableHead>
                   <TableHead>Receiver</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -117,9 +128,34 @@ export default function PortalDeliveriesPage() {
                     <TableCell>{d.delivery_date}</TableCell>
                     <TableCell>{d.receiver_name ?? "—"}</TableCell>
                     <TableCell>
-                      <Badge variant={d.status === "delivered" ? "default" : "secondary"}>
-                        {d.status ?? "pending"}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant={d.status === "delivered" ? "default" : "secondary"}>
+                          {d.status ?? "pending"}
+                        </Badge>
+                        {d.status === "delivered" && (
+                          <span title="Delivery update sent">
+                            <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        {d.challan_id && (
+                          <Button asChild size="sm" variant="ghost" title="Download challan">
+                            <Link to={`/portal/challan/${d.challan_id}`}>
+                              <Download className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        )}
+                        {d.sale_id && (
+                          <Button asChild size="sm" variant="ghost" title="Download invoice">
+                            <Link to={`/portal/invoice/${d.sale_id}`}>
+                              <Download className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

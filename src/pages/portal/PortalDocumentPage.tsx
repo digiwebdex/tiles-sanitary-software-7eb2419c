@@ -53,16 +53,24 @@ export default function PortalDocumentPage({ kind }: Props) {
     );
   }
 
-  // Narrow accessors
-  const dealer = (data as { dealer?: Record<string, unknown> }).dealer ?? {};
-  const customer = (data as { customer?: Record<string, unknown> }).customer ?? {};
-  const items = (data as { items?: Record<string, unknown>[] }).items ?? [];
+  // Narrow accessors via unknown to safely access shared and kind-specific fields
+  const generic = data as unknown as {
+    dealer?: Record<string, unknown>;
+    customer?: Record<string, unknown>;
+    items?: Record<string, unknown>[];
+    sale?: Record<string, unknown>;
+    quotation?: Record<string, unknown>;
+    challan?: Record<string, unknown>;
+  };
+  const dealer = generic.dealer ?? {};
+  const customer = generic.customer ?? {};
+  const items = generic.items ?? [];
   const header =
-    kind === "invoice"
-      ? (data as { sale: Record<string, unknown> }).sale
+    (kind === "invoice"
+      ? generic.sale
       : kind === "quotation"
-        ? (data as { quotation: Record<string, unknown> }).quotation
-        : (data as { challan: Record<string, unknown> }).challan;
+        ? generic.quotation
+        : generic.challan) ?? {};
 
   const docNo = String(
     header[
