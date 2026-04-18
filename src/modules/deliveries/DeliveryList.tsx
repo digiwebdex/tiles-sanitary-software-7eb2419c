@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { deliveryService } from "@/services/deliveryService";
+import { useDealerInfo } from "@/hooks/useDealerInfo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,9 +17,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Pagination from "@/components/Pagination";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Eye, Pencil, Download, Trash2, MapPin } from "lucide-react";
+import { Search, Eye, Pencil, Download, Trash2, MapPin, MessageCircle } from "lucide-react";
 import DeliveryDetailDialog from "./DeliveryDetailDialog";
 import { ProjectSiteFilter } from "@/components/project/ProjectSiteFilter";
+import SendWhatsAppDialog from "@/components/whatsapp/SendWhatsAppDialog";
+import { buildDeliveryUpdateMessage } from "@/services/whatsappService";
 
 interface DeliveryListProps {
   dealerId: string;
