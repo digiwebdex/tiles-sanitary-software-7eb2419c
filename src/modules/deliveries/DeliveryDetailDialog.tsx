@@ -84,6 +84,18 @@ const DeliveryDetailDialog = ({ deliveryId, dealerId, onClose }: Props) => {
           <DialogTitle className="sr-only">Delivery Details</DialogTitle>
           <div />
           <div className="flex items-center gap-2">
+            {(phone || customer?.phone) && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1"
+                onClick={() => setWaOpen(true)}
+                title="Send Delivery Update via WhatsApp"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span className="hidden sm:inline">WhatsApp</span>
+              </Button>
+            )}
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => window.print()}>
               <Printer className="h-4 w-4" />
             </Button>
