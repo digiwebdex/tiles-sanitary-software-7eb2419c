@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { deliveryService } from "@/services/deliveryService";
 import { useDealerInfo } from "@/hooks/useDealerInfo";
@@ -8,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
-import { Printer, X } from "lucide-react";
+import { Printer, X, MessageCircle } from "lucide-react";
+import SendWhatsAppDialog from "@/components/whatsapp/SendWhatsAppDialog";
+import { buildDeliveryUpdateMessage } from "@/services/whatsappService";
 
 interface Props {
   deliveryId: string | null;
@@ -18,6 +21,7 @@ interface Props {
 
 const DeliveryDetailDialog = ({ deliveryId, dealerId, onClose }: Props) => {
   const { data: dealerInfo } = useDealerInfo();
+  const [waOpen, setWaOpen] = useState(false);
 
   const { data: delivery, isLoading } = useQuery({
     queryKey: ["delivery-detail", deliveryId],
@@ -80,6 +84,18 @@ const DeliveryDetailDialog = ({ deliveryId, dealerId, onClose }: Props) => {
           <DialogTitle className="sr-only">Delivery Details</DialogTitle>
           <div />
           <div className="flex items-center gap-2">
+            {(phone || customer?.phone) && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1"
+                onClick={() => setWaOpen(true)}
+                title="Send Delivery Update via WhatsApp"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span className="hidden sm:inline">WhatsApp</span>
+              </Button>
+            )}
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => window.print()}>
               <Printer className="h-4 w-4" />
             </Button>
@@ -283,6 +299,30 @@ const DeliveryDetailDialog = ({ deliveryId, dealerId, onClose }: Props) => {
           </div>
         )}
       </DialogContent>
+      {delivery && (phone || customer?.phone) && (
+        <SendWhatsAppDialog
+          open={waOpen}
+          onOpenChange={setWaOpen}
+          dealerId={dealerId}
+          messageType="delivery_update"
+          sourceType="delivery"
+          sourceId={delivery.id}
+          templateKey="delivery_update"
+          defaultPhone={(phone || customer?.phone) ?? ""}
+          defaultName={customer?.name ?? delivery.receiver_name ?? null}
+          defaultMessage={buildDeliveryUpdateMessage({
+            dealerName: dealerInfo?.name ?? "Your Business",
+            customerName: customer?.name ?? delivery.receiver_name ?? null,
+            deliveryNo: deliveryNo || challanNo || `DO${delivery.id.slice(0, 8)}`,
+            status: statusLabel,
+            itemCount: displayItems.length,
+            deliveryDate: delivery.delivery_date,
+            invoiceNo: invoiceNo ?? null,
+            receiverName: delivery.receiver_name ?? null,
+          })}
+          title="Send Delivery Update via WhatsApp"
+        />
+      )}
     </Dialog>
   );
 };

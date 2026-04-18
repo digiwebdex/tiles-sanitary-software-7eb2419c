@@ -638,8 +638,32 @@ export default function CollectionTracker({ dealerId }: { dealerId: string }) {
               />
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="gap-2 flex-wrap sm:flex-nowrap">
             <Button variant="outline" onClick={() => setReceiptData(null)}>Close</Button>
+            {receiptData?.customerPhone && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (!receiptData) return;
+                  setWaDialog({
+                    type: "payment_receipt",
+                    phone: receiptData.customerPhone!,
+                    name: receiptData.customerName,
+                    sourceId: null,
+                    message: buildPaymentReceiptMessage({
+                      dealerName: dealerInfo?.name ?? "Your Business",
+                      customerName: receiptData.customerName,
+                      receiptNo: receiptData.receiptNo,
+                      amount: receiptData.amount,
+                      remainingDue: receiptData.remainingDue,
+                      date: format(new Date(receiptData.date), "dd MMM yyyy"),
+                    }),
+                  });
+                }}
+              >
+                <MessageCircle className="h-4 w-4 mr-1" /> Send via WhatsApp
+              </Button>
+            )}
             <Button onClick={() => {
               const content = receiptRef.current;
               if (!content) return;
@@ -662,6 +686,27 @@ export default function CollectionTracker({ dealerId }: { dealerId: string }) {
         customerName={followUpCustomer?.name ?? ""}
         dealerId={dealerId}
       />
+
+      {/* WhatsApp Send Dialog (overdue reminder + payment receipt share) */}
+      {waDialog && (
+        <SendWhatsAppDialog
+          open={!!waDialog}
+          onOpenChange={(o) => !o && setWaDialog(null)}
+          dealerId={dealerId}
+          messageType={waDialog.type}
+          sourceType={waDialog.type === "payment_receipt" ? "payment" : "customer"}
+          sourceId={waDialog.sourceId}
+          templateKey={waDialog.type}
+          defaultPhone={waDialog.phone}
+          defaultName={waDialog.name}
+          defaultMessage={waDialog.message}
+          title={
+            waDialog.type === "payment_receipt"
+              ? "Send Receipt via WhatsApp"
+              : "Send Overdue Reminder via WhatsApp"
+          }
+        />
+      )}
     </div>
   );
 }

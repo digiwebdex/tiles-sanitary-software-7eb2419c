@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { deliveryService } from "@/services/deliveryService";
+import { useDealerInfo } from "@/hooks/useDealerInfo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,9 +17,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Pagination from "@/components/Pagination";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Eye, Pencil, Download, Trash2, MapPin } from "lucide-react";
+import { Search, Eye, Pencil, Download, Trash2, MapPin, MessageCircle } from "lucide-react";
 import DeliveryDetailDialog from "./DeliveryDetailDialog";
 import { ProjectSiteFilter } from "@/components/project/ProjectSiteFilter";
+import SendWhatsAppDialog from "@/components/whatsapp/SendWhatsAppDialog";
+import { buildDeliveryUpdateMessage } from "@/services/whatsappService";
 
 interface DeliveryListProps {
   dealerId: string;
@@ -45,8 +48,15 @@ const DeliveryList = ({ dealerId }: DeliveryListProps) => {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [siteId, setSiteId] = useState<string | null>(null);
+  const [waDialog, setWaDialog] = useState<null | {
+    deliveryId: string;
+    phone: string;
+    name: string;
+    message: string;
+  }>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: dealerInfo } = useDealerInfo();
 
   const { data, isLoading } = useQuery({
     queryKey: ["deliveries", dealerId, page, statusFilter, projectId, siteId],
@@ -209,6 +219,40 @@ const DeliveryList = ({ dealerId }: DeliveryListProps) => {
                                 </DropdownMenuItem>
                               </>
                             )}
+                            {(phone || customer?.phone) && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    const recipient = phone || customer?.phone;
+                                    if (!recipient) return;
+                                    const statusText =
+                                      d.status === "delivered"
+                                        ? "Delivered"
+                                        : d.status === "in_transit"
+                                        ? "In Transit"
+                                        : "Pending";
+                                    setWaDialog({
+                                      deliveryId: d.id,
+                                      phone: recipient,
+                                      name: customer?.name ?? d.receiver_name ?? "",
+                                      message: buildDeliveryUpdateMessage({
+                                        dealerName: dealerInfo?.name ?? "Your Business",
+                                        customerName: customer?.name ?? d.receiver_name ?? null,
+                                        deliveryNo: deliveryNo || challanNo || `DO${d.id.slice(0, 8)}`,
+                                        status: statusText,
+                                        itemCount,
+                                        deliveryDate: d.delivery_date,
+                                        invoiceNo: invoiceNo ?? null,
+                                        receiverName: d.receiver_name ?? null,
+                                      }),
+                                    });
+                                  }}
+                                >
+                                  <MessageCircle className="mr-2 h-4 w-4" /> Delivery Update via WhatsApp
+                                </DropdownMenuItem>
+                              </>
+                            )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem>
                               <Download className="mr-2 h-4 w-4" /> Download as PDF
@@ -230,6 +274,21 @@ const DeliveryList = ({ dealerId }: DeliveryListProps) => {
         dealerId={dealerId}
         onClose={() => setDetailId(null)}
       />
+      {waDialog && (
+        <SendWhatsAppDialog
+          open={!!waDialog}
+          onOpenChange={(o) => !o && setWaDialog(null)}
+          dealerId={dealerId}
+          messageType="delivery_update"
+          sourceType="delivery"
+          sourceId={waDialog.deliveryId}
+          templateKey="delivery_update"
+          defaultPhone={waDialog.phone}
+          defaultName={waDialog.name}
+          defaultMessage={waDialog.message}
+          title="Send Delivery Update via WhatsApp"
+        />
+      )}
     </div>
   );
 };

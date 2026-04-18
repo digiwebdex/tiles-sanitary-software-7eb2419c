@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { MessageCircle, Search, ExternalLink } from "lucide-react";
+import { MessageCircle, Search, ExternalLink, CheckCircle2, XCircle, MoreHorizontal } from "lucide-react";
+import { toast } from "sonner";
 
 import { useDealerId } from "@/hooks/useDealerId";
 import {
@@ -31,6 +32,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import Pagination from "@/components/Pagination";
 
 const TYPE_LABELS: Record<WhatsAppMessageType, string> = {
@@ -75,6 +83,7 @@ const statusLabel = (s: WhatsAppMessageStatus): string => {
 
 const WhatsAppLogsPage = () => {
   const dealerId = useDealerId();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<WhatsAppMessageType | "all">("all");
@@ -91,6 +100,25 @@ const WhatsAppLogsPage = () => {
         search,
       }),
     enabled: !!dealerId,
+  });
+
+  const markSent = useMutation({
+    mutationFn: (id: string) => whatsappService.markSent(id),
+    onSuccess: () => {
+      toast.success("Marked as sent");
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-logs"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const markFailed = useMutation({
+    mutationFn: (id: string) =>
+      whatsappService.markFailed(id, "Marked failed by user"),
+    onSuccess: () => {
+      toast.success("Marked as failed");
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-logs"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const rows = data?.rows ?? [];
@@ -252,21 +280,40 @@ const WhatsAppLogsPage = () => {
                         {r.error_message ?? ""}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          title="Re-open in WhatsApp"
-                          onClick={() =>
-                            window.open(
-                              buildWaLink(r.recipient_phone, r.message_text),
-                              "_blank",
-                              "noopener,noreferrer"
-                            )
-                          }
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-7 w-7">
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                              onClick={() =>
+                                window.open(
+                                  buildWaLink(r.recipient_phone, r.message_text),
+                                  "_blank",
+                                  "noopener,noreferrer"
+                                )
+                              }
+                            >
+                              <ExternalLink className="mr-2 h-4 w-4" /> Retry / Re-open
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              disabled={r.status === "sent" || markSent.isPending}
+                              onClick={() => markSent.mutate(r.id)}
+                            >
+                              <CheckCircle2 className="mr-2 h-4 w-4 text-primary" /> Mark Sent
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={r.status === "failed" || markFailed.isPending}
+                              onClick={() => markFailed.mutate(r.id)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <XCircle className="mr-2 h-4 w-4" /> Mark Failed
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
