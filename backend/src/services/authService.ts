@@ -36,7 +36,7 @@ function signAccessToken(payload: JwtPayload): string {
   return jwt.sign(payload, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN as string | number });
 }
 
-function newRefreshToken(): { token: string; hash: string; expiresAt: Date } {
+function generateRefreshToken(): { token: string; hash: string; expiresAt: Date } {
   const token = crypto.randomBytes(64).toString('hex');
   const hash = crypto.createHash('sha256').update(token).digest('hex');
   const expiresAt = new Date(Date.now() + parseDuration(env.JWT_REFRESH_EXPIRES_IN));
@@ -209,7 +209,7 @@ export const authService = {
 
     const payload = await buildJwtPayload(user.id);
     const accessToken = signAccessToken(payload);
-    const { token: refreshToken, hash, expiresAt } = newRefreshToken();
+    const { token: refreshToken, hash, expiresAt } = generateRefreshToken();
 
     await db('refresh_tokens').insert({
       user_id: user.id,
@@ -263,7 +263,7 @@ export const authService = {
     // Issue new
     const payload = await buildJwtPayload(stored.user_id);
     const accessToken = signAccessToken(payload);
-    const { token: newRefreshToken, hash: newHash, expiresAt } = newRefreshToken();
+    const { token: newRefreshTokenStr, hash: newHash, expiresAt } = generateRefreshToken();
 
     const [created] = await db('refresh_tokens')
       .insert({
@@ -279,7 +279,7 @@ export const authService = {
       replaced_by: created?.id ?? created,
     });
 
-    return { accessToken, refreshToken: newRefreshToken, user: payload };
+    return { accessToken, refreshToken: newRefreshTokenStr, user: payload };
   },
 
   async logout(refreshToken: string): Promise<void> {
