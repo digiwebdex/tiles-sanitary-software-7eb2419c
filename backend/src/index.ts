@@ -8,6 +8,7 @@ import { checkDbConnection } from './db/connection';
 // Routes
 import authRoutes from './routes/auth';
 import healthRoutes from './routes/health';
+import suppliersRoutes from './routes/suppliers';
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use(express.urlencoded({ extended: true }));
 // ── Routes ──
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/suppliers', suppliersRoutes);
 
 // ── 404 handler ──
 app.use((_req, res) => {
