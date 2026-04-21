@@ -127,8 +127,8 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     if (search) {
-      q = q.andWhere((b) => {
-        b.whereILike('name', `%${search}%`)
+      q = q.andWhere(function () {
+        this.whereILike('name', `%${search}%`)
           .orWhereILike('contact_person', `%${search}%`)
           .orWhereILike('phone', `%${search}%`);
       });
