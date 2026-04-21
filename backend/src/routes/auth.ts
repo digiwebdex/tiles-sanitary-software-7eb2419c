@@ -14,21 +14,65 @@ const refreshSchema = z.object({
   refreshToken: z.string().min(1),
 });
 
+const emailSchema = z.object({
+  email: z.string().email().max(255),
+});
+
+const resetSchema = z.object({
+  token: z.string().min(10),
+  password: z.string().min(6).max(72),
+});
+
+function getIp(req: Request): string | undefined {
+  const fwd = req.headers['x-forwarded-for'];
+  if (typeof fwd === 'string') return fwd.split(',')[0].trim();
+  return req.ip;
+}
+
+// GET /api/auth/lock-status?email=...  — pre-login check (matches old Supabase RPC)
+router.get('/lock-status', async (req: Request, res: Response) => {
+  try {
+    const email = String(req.query.email ?? '').trim();
+    if (!email) {
+      res.json({ locked: false, remaining_attempts: 3 });
+      return;
+    }
+    const status = await authService.checkLock(email);
+    res.json(status);
+  } catch {
+    res.json({ locked: false });
+  }
+});
+
 // POST /api/auth/login
 router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
-    const result = await authService.login(email, password);
+    const result = await authService.login(email, password, getIp(req));
 
     res.json({
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
       user: result.user,
+      lock: result.lock,
     });
   } catch (err: any) {
-    const message = err.message || 'Login failed';
-    const status = message.includes('Invalid') || message.includes('suspended') ? 401 : 400;
-    res.status(status).json({ error: message });
+    const code = err.code as string | undefined;
+    const lock = err.lock;
+
+    if (code === 'LOCKED') {
+      res.status(423).json({ error: err.message, code, lock });
+      return;
+    }
+    if (code === 'INVALID_CREDENTIALS') {
+      res.status(401).json({ error: err.message, code, lock });
+      return;
+    }
+    if (code === 'SUSPENDED') {
+      res.status(403).json({ error: err.message, code });
+      return;
+    }
+    res.status(400).json({ error: err.message || 'Login failed' });
   }
 });
 
@@ -44,7 +88,10 @@ router.post('/refresh', async (req: Request, res: Response) => {
       user: result.user,
     });
   } catch (err: any) {
-    res.status(401).json({ error: err.message || 'Token refresh failed' });
+    res.status(401).json({
+      error: err.message || 'Token refresh failed',
+      code: err.code,
+    });
   }
 });
 
@@ -55,7 +102,6 @@ router.post('/logout', async (req: Request, res: Response) => {
     await authService.logout(refreshToken);
     res.json({ success: true });
   } catch {
-    // Always return success for logout (don't leak token validity)
     res.json({ success: true });
   }
 });
@@ -70,9 +116,39 @@ router.post('/logout-all', authenticate, async (req: Request, res: Response) => 
   }
 });
 
-// GET /api/auth/me (returns current user info)
+// GET /api/auth/me
 router.get('/me', authenticate, async (req: Request, res: Response) => {
   res.json({ user: req.user });
+});
+
+// POST /api/auth/password-reset/request
+// Always returns success (no enumeration). When SMTP is wired the route can
+// dispatch the email; for now it returns the token in dev mode only.
+router.post('/password-reset/request', async (req: Request, res: Response) => {
+  try {
+    const { email } = emailSchema.parse(req.body);
+    const result = await authService.requestPasswordReset(email);
+
+    const payload: any = { success: true };
+    if (result && process.env.NODE_ENV !== 'production') {
+      // Dev-only convenience so QA can complete the flow without SMTP.
+      payload.devToken = result.token;
+    }
+    res.json(payload);
+  } catch {
+    res.json({ success: true });
+  }
+});
+
+// POST /api/auth/password-reset/confirm
+router.post('/password-reset/confirm', async (req: Request, res: Response) => {
+  try {
+    const { token, password } = resetSchema.parse(req.body);
+    await authService.resetPassword(token, password);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Invalid reset request' });
+  }
 });
 
 export default router;
