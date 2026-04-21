@@ -104,6 +104,24 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * Bounces "/" to the right entry for the current subdomain.
+ *   app.sanitileserp.com/    → /login
+ *   portal.sanitileserp.com/ → /portal/login
+ * Marketing host keeps "/" as the landing page.
+ */
+const HostEntryRedirect = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const target = getHostEntryRedirect(location.pathname, window.location.hostname);
+    if (target && target !== location.pathname) {
+      navigate(target, { replace: true });
+    }
+  }, [location.pathname, navigate]);
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -111,6 +129,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <HostEntryRedirect />
           <Routes>
             {/* Public */}
             <Route path="/" element={<LandingPage />} />
