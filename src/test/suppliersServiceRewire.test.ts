@@ -12,9 +12,11 @@
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-// ─── Mock the shared dataClient ─────────────────────────────────────────────
-const adapterListMock = vi.fn();
-const adapterGetByIdMock = vi.fn();
+// vi.mock factories are hoisted, so any refs they capture must be hoisted too.
+const { adapterListMock, adapterGetByIdMock } = vi.hoisted(() => ({
+  adapterListMock: vi.fn(),
+  adapterGetByIdMock: vi.fn(),
+}));
 
 vi.mock("@/lib/data/dataClient", () => ({
   dataClient: () => ({
@@ -26,18 +28,33 @@ vi.mock("@/lib/data/dataClient", () => ({
   }),
 }));
 
-// ─── Mock the supabase client (legacy search path + writes) ─────────────────
-const supabaseRangeMock = vi.fn();
-const supabaseOrderMock = vi.fn(() => ({ range: supabaseRangeMock }));
-const supabaseOrMock = vi.fn(() => ({ order: supabaseOrderMock }));
-const supabaseEqMock = vi.fn(() => ({ or: supabaseOrMock }));
-const supabaseSelectMock = vi.fn(() => ({ eq: supabaseEqMock }));
-const supabaseFromMock = vi.fn(() => ({ select: supabaseSelectMock }));
+const {
+  supabaseRangeMock,
+  supabaseOrMock,
+  supabaseEqMock,
+  supabaseFromMock,
+  supabaseGetUserMock,
+} = vi.hoisted(() => {
+  const supabaseRangeMock = vi.fn();
+  const supabaseOrderMock = vi.fn(() => ({ range: supabaseRangeMock }));
+  const supabaseOrMock = vi.fn(() => ({ order: supabaseOrderMock }));
+  const supabaseEqMock = vi.fn(() => ({ or: supabaseOrMock }));
+  const supabaseSelectMock = vi.fn(() => ({ eq: supabaseEqMock }));
+  const supabaseFromMock = vi.fn(() => ({ select: supabaseSelectMock }));
+  const supabaseGetUserMock = vi.fn(async () => ({ data: { user: null } }));
+  return {
+    supabaseRangeMock,
+    supabaseOrMock,
+    supabaseEqMock,
+    supabaseFromMock,
+    supabaseGetUserMock,
+  };
+});
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: supabaseFromMock,
-    auth: { getUser: vi.fn(async () => ({ data: { user: null } })) },
+    auth: { getUser: supabaseGetUserMock },
   },
 }));
 
@@ -47,10 +64,8 @@ beforeEach(() => {
   adapterListMock.mockReset();
   adapterGetByIdMock.mockReset();
   supabaseRangeMock.mockReset();
-  supabaseOrderMock.mockClear();
   supabaseOrMock.mockClear();
   supabaseEqMock.mockClear();
-  supabaseSelectMock.mockClear();
   supabaseFromMock.mockClear();
 });
 
