@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Navigate, Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { Navigate, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { authBridge } from "@/lib/authBridge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const LoginPage = () => {
   const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,11 +20,12 @@ const LoginPage = () => {
     locked: boolean;
     remaining_attempts?: number;
     remaining_minutes?: number;
-    locked_until?: string;
   } | null>(null);
   const { toast } = useToast();
 
-  if (!authLoading && user) {
+  // Supabase path: AuthContext drives redirect when Supabase session arrives.
+  // VPS path: AuthContext stays empty; we navigate manually after signIn.
+  if (!authBridge.isVps && !authLoading && user) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -33,24 +35,11 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      // 1. Check if account is locked (server-side)
-      const { data: lockCheck, error: lockErr } = await supabase.rpc(
-        "check_account_locked",
-        { _email: email.trim().toLowerCase() }
-      );
-
-      if (lockErr) {
-        console.error("Lock check error:", lockErr.message);
-      }
-
-      const lockData = lockCheck as { locked: boolean; remaining_minutes?: number; remaining_attempts?: number } | null;
-
-      if (lockData?.locked) {
-        const mins = Math.ceil(lockData.remaining_minutes ?? 30);
-        setLockInfo({
-          locked: true,
-          remaining_minutes: mins,
-        });
+      // 1. Pre-login lock check (single source of truth — backend-aware via bridge)
+      const lockCheck = await authBridge.getLockStatus(email.trim());
+      if (lockCheck.locked) {
+        const mins = Math.ceil(lockCheck.remaining_minutes ?? 30);
+        setLockInfo({ locked: true, remaining_minutes: mins });
         toast({
           variant: "destructive",
           title: "অ্যাকাউন্ট লক করা হয়েছে",
@@ -60,49 +49,37 @@ const LoginPage = () => {
         return;
       }
 
-      // 2. Attempt login
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
+      // 2. Sign in via bridge (Supabase OR VPS depending on env flag)
+      const result = await authBridge.signIn(email.trim(), password);
 
-      if (error) {
-        // 3. Record failed attempt
-        const { data: failData } = await supabase.rpc("record_failed_login", {
-          _email: email.trim().toLowerCase(),
-          _ip: null,
-        });
-
-        const failResult = failData as { locked: boolean; remaining_attempts?: number; message?: string } | null;
-
-        if (failResult?.locked) {
-          setLockInfo({ locked: true, remaining_minutes: 30 });
+      if (!result.success) {
+        const lock = result.lock ?? { locked: false };
+        if (lock.locked) {
+          setLockInfo({ locked: true, remaining_minutes: lock.remaining_minutes ?? 30 });
           toast({
             variant: "destructive",
             title: "অ্যাকাউন্ট লক!",
             description: "৩ বার ভুল পাসওয়ার্ড দেওয়ায় অ্যাকাউন্ট ৩০ মিনিটের জন্য লক হয়েছে।",
           });
         } else {
-          const remaining = failResult?.remaining_attempts ?? 0;
-          setLockInfo({
-            locked: false,
-            remaining_attempts: remaining,
-          });
+          const remaining = lock.remaining_attempts ?? 0;
+          setLockInfo({ locked: false, remaining_attempts: remaining });
           toast({
             variant: "destructive",
             title: "লগইন ব্যর্থ",
             description:
               remaining > 0
                 ? `ভুল পাসওয়ার্ড। আর ${remaining} বার চেষ্টা করতে পারবেন।`
-                : error.message,
+                : result.message ?? "Login failed",
           });
         }
       } else {
-        // 4. Successful login — clear attempts
-        await supabase.rpc("record_successful_login", {
-          _email: email.trim().toLowerCase(),
-        });
         setLockInfo(null);
+        // VPS path: AuthContext won't react — push manually.
+        if (authBridge.isVps) {
+          navigate("/dashboard", { replace: true });
+        }
+        // Supabase path: onAuthStateChange will trigger AuthContext + redirect.
       }
     } catch (err) {
       console.error("Login error:", err);
