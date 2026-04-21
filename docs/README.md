@@ -20,6 +20,7 @@
 | 8 | [API_REFERENCE.md](./API_REFERENCE.md) | API documentation — Express endpoints + Edge functions + Supabase SDK patterns |
 | 9 | [SECURITY.md](./SECURITY.md) | Security documentation — auth, RBAC, RLS, encryption, audit trail |
 | 10 | [ENVIRONMENT.md](./ENVIRONMENT.md) | Environment configuration — all env vars, secrets, ports |
+| 11 | [GITHUB_RECOVERY.md](./GITHUB_RECOVERY.md) | GitHub disconnect & reconnect checklist — recover repo link when sync breaks |
 
 ## 📋 Root-Level Files
 
@@ -37,3 +38,4 @@
 - **Add Feature:** See [DEVELOPER_DOCS.md](./DEVELOPER_DOCS.md) → Modules Reference
 - **Database Change:** See [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)
 - **Security Review:** See [SECURITY.md](./SECURITY.md)
+- **Broken GitHub Sync:** See [GITHUB_RECOVERY.md](./GITHUB_RECOVERY.md)
