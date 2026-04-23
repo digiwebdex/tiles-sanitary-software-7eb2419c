@@ -234,27 +234,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isDealerAdmin = roles.some((r) => r.role === "dealer_admin");
   const accessLevel = computeAccessLevel(subscription, roles, profile?.dealer_id ?? null);
 
+  async function fetchUserRolesWithRetry(userId: string): Promise<UserRole[]> {
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+
+      if (error) {
+        subLog.error(`Roles fetch attempt ${attempt} failed:`, error.message);
+      } else if (Array.isArray(data) && data.length > 0) {
+        return data as UserRole[];
+      } else if (attempt === 4) {
+        return [];
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, attempt * 400));
+    }
+
+    return [];
+  }
+
   async function loadUserData(userId: string) {
     try {
-      // Fetch profile and roles in parallel.
-      // Use maybeSingle() for profile to avoid throwing on RLS/network errors.
-      const [profileRes, rolesRes] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
-        supabase.from("user_roles").select("role").eq("user_id", userId),
-      ]);
+      // Fetch profile first, then roles with retry. Fresh self-signups can hit
+      // a short auth/session propagation window where roles return [] once.
+      const profileRes = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
 
       if (profileRes.error) {
         subLog.error("Profile fetch error:", profileRes.error.message);
       }
-      if (rolesRes.error) {
-        subLog.error("Roles fetch error:", rolesRes.error.message);
-      }
 
       // Safe null fallbacks — never crash if DB returns null/undefined
       const prof = (profileRes.data as Profile | null) ?? null;
-      const fetchedRoles = Array.isArray(rolesRes.data)
-        ? (rolesRes.data as UserRole[])
-        : [];
+      const fetchedRoles = await fetchUserRolesWithRetry(userId);
+
+      if (prof && fetchedRoles.length === 0) {
+        subLog.error("No roles found after retry; account provisioning is incomplete. user_id:", userId);
+      }
 
       // Persist in ref for synchronous checks below
       loadedRolesRef.current = fetchedRoles;
