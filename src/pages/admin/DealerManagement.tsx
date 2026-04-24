@@ -234,6 +234,33 @@ const DealerManagement = () => {
     },
   });
 
+  const deleteDealerMutation = useMutation({
+    mutationFn: async () => {
+      if (!deleteDealer) throw new Error("No dealer selected");
+      if (deleteConfirmName.trim() !== deleteDealer.name.trim()) {
+        throw new Error("Confirmation name does not match");
+      }
+      const res = await supabase.functions.invoke("delete-dealer", {
+        body: { dealer_id: deleteDealer.id, confirm_name: deleteConfirmName.trim() },
+      });
+      if (res.error) throw new Error(res.error.message || "Failed to delete dealer");
+      if (res.data?.error) throw new Error(res.data.error);
+      return res.data;
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: `Dealer "${data?.deleted_dealer ?? ""}" deleted`,
+        description: `Removed ${data?.deleted_auth_users ?? 0} user(s) and all related records.`,
+      });
+      invalidateAll();
+      setDeleteDealer(null);
+      setDeleteConfirmName("");
+    },
+    onError: (e: Error) => {
+      toast({ variant: "destructive", title: "Delete failed", description: e.message });
+    },
+  });
+
 
   // ─── Helpers ───
   const closeDialog = () => {
