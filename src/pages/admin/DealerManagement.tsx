@@ -69,6 +69,10 @@ const DealerManagement = () => {
   // Detail sheet
   const [detailDealer, setDetailDealer] = useState<any>(null);
 
+  // Delete dialog
+  const [deleteDealer, setDeleteDealer] = useState<any>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+
   // ─── Queries ───
   const { data: dealers = [], isLoading } = useQuery({
     queryKey: ["admin-dealers-full"],
