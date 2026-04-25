@@ -41,6 +41,7 @@ const GetStartedPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [form, setForm] = useState<FormData>({
     name: "",
@@ -82,15 +83,12 @@ const GetStartedPage = () => {
         throw new Error(signupResult.message || "Signup failed. Please try again.");
       }
 
+      // Account created in PENDING state — no auto-login.
+      setSubmitted(true);
       toast({
-        title: "Welcome to TilesERP! 🎉",
-        description: "Your account is ready. Redirecting to dashboard...",
+        title: "Registration Submitted ✅",
+        description: "Your account is awaiting Super Admin approval.",
       });
-
-      // Hard reload so the AuthContext picks up the freshly-stored VPS tokens.
-      setTimeout(() => {
-        window.location.assign("/dashboard");
-      }, 800);
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -101,6 +99,39 @@ const GetStartedPage = () => {
       setLoading(false);
     }
   };
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-[#0d1117] flex items-center justify-center p-4">
+        <div className="max-w-md w-full rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center space-y-5">
+          <div className="mx-auto h-16 w-16 rounded-full bg-orange-500/10 flex items-center justify-center">
+            <CheckCircle2 className="h-8 w-8 text-orange-400" />
+          </div>
+          <h1 className="text-2xl font-bold text-white">Registration Submitted</h1>
+          <p className="text-gray-400 leading-relaxed">
+            Thank you for signing up! Your account is now <span className="text-orange-400 font-semibold">awaiting approval</span> from our Super Admin team.
+          </p>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm text-gray-500 text-left space-y-2">
+            <p>📧 You'll be notified by email once approved.</p>
+            <p>⏱️ Approval usually takes a few hours.</p>
+            <p>📞 Need it faster? Call <span className="text-gray-300">01674533303</span>.</p>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Link to="/" className="flex-1">
+              <Button variant="outline" className="w-full border-white/10 bg-white/5 text-white hover:bg-white/10">
+                Back to Home
+              </Button>
+            </Link>
+            <Link to="/login" className="flex-1">
+              <Button className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0">
+                Go to Login
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0d1117]">

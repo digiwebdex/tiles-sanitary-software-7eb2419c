@@ -88,7 +88,7 @@ const DealerManagement = () => {
       const subs = subsRes.data ?? [];
       const profiles = profilesRes.data ?? [];
 
-      return (dealersRes.data ?? []).map((d: any) => {
+      const mapped = (dealersRes.data ?? []).map((d: any) => {
         const latestSub = subs.find((s: any) => s.dealer_id === d.id);
         const dealerUsers = profiles.filter((p: any) => p.dealer_id === d.id);
         return {
@@ -97,6 +97,13 @@ const DealerManagement = () => {
           userCount: dealerUsers.length,
           users: dealerUsers,
         };
+      });
+
+      // Pending approvals float to the top so super admin sees them first.
+      return mapped.sort((a: any, b: any) => {
+        const aPending = a.status === "pending" ? 0 : 1;
+        const bPending = b.status === "pending" ? 0 : 1;
+        return aPending - bPending;
       });
     },
   });
@@ -352,12 +359,24 @@ const DealerManagement = () => {
                           })()}
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={(d.status ?? "active") === "active" ? "default" : "destructive"}
-                            className="capitalize text-xs"
-                          >
-                            {d.status ?? "active"}
-                          </Badge>
+                          {(() => {
+                            const status = (d.status ?? "active") as string;
+                            if (status === "pending") {
+                              return (
+                                <Badge className="bg-amber-500 text-white hover:bg-amber-600 capitalize text-xs">
+                                  Pending Approval
+                                </Badge>
+                              );
+                            }
+                            return (
+                              <Badge
+                                variant={status === "active" ? "default" : "destructive"}
+                                className="capitalize text-xs"
+                              >
+                                {status}
+                              </Badge>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
