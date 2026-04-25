@@ -44,6 +44,14 @@ function makeError(message: string, status: number, body: any): VpsAuthError {
 
 // ── Token store ───────────────────────────────────────────────────────────
 
+function notifyAuthChanged() {
+  try {
+    window.dispatchEvent(new Event("vps-auth-change"));
+  } catch {
+    /* non-browser context */
+  }
+}
+
 export const vpsTokenStore = {
   get access(): string | null {
     try { return localStorage.getItem(ACCESS_KEY); } catch { return null; }
