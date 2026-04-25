@@ -44,6 +44,14 @@ function makeError(message: string, status: number, body: any): VpsAuthError {
 
 // ── Token store ───────────────────────────────────────────────────────────
 
+function notifyAuthChanged() {
+  try {
+    window.dispatchEvent(new Event("vps-auth-change"));
+  } catch {
+    /* non-browser context */
+  }
+}
+
 export const vpsTokenStore = {
   get access(): string | null {
     try { return localStorage.getItem(ACCESS_KEY); } catch { return null; }
@@ -64,6 +72,7 @@ export const vpsTokenStore = {
       localStorage.setItem(ACCESS_KEY, tokens.accessToken);
       localStorage.setItem(REFRESH_KEY, tokens.refreshToken);
       localStorage.setItem(USER_KEY, JSON.stringify(tokens.user));
+      notifyAuthChanged();
     } catch {
       /* ignore quota errors */
     }
@@ -73,6 +82,7 @@ export const vpsTokenStore = {
       localStorage.removeItem(ACCESS_KEY);
       localStorage.removeItem(REFRESH_KEY);
       localStorage.removeItem(USER_KEY);
+      notifyAuthChanged();
     } catch {
       /* ignore */
     }

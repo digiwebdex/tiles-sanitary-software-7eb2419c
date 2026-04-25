@@ -15,16 +15,19 @@ function optionalEnv(key: string, fallback = ""): string {
 
 /**
  * Phase 1 auth-backend toggle.
- *   "supabase" (default) → existing Supabase auth path is unchanged.
- *   "vps"                → frontend authBridge talks to the self-hosted API.
+ *   "supabase" → existing Lovable Cloud auth path.
+ *   "vps"      → frontend authBridge talks to the self-hosted API.
  *
- * Flip to "vps" by setting `VITE_AUTH_BACKEND=vps` at build time.
- * Switching back to "supabase" is an instant rollback (rebuild + redeploy).
+ * Production safety: sanitileserp.com hosts must use VPS auth even if the
+ * build env forgot VITE_AUTH_BACKEND. This prevents the live custom domain
+ * from posting passwords to the old Lovable Cloud auth endpoint.
  */
 export type AuthBackend = "supabase" | "vps";
 
-const rawBackend = optionalEnv("VITE_AUTH_BACKEND", "supabase").toLowerCase();
-const AUTH_BACKEND: AuthBackend = rawBackend === "vps" ? "vps" : "supabase";
+const rawBackend = optionalEnv("VITE_AUTH_BACKEND", "").toLowerCase();
+const isSanitilesHost =
+  typeof window !== "undefined" && /(^|\.)sanitileserp\.com$/i.test(window.location.hostname);
+const AUTH_BACKEND: AuthBackend = rawBackend === "vps" || (!rawBackend && isSanitilesHost) ? "vps" : "supabase";
 
 /**
  * Phase 2 per-resource data backend toggles.

@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { parseLocalDate } from "@/lib/utils";
 import { subLog } from "@/lib/logger";
+import { env } from "@/lib/env";
+import { vpsAuthApi, vpsTokenStore, type VpsUser } from "@/lib/vpsAuthClient";
 
 interface Profile {
   id: string;
@@ -103,6 +105,34 @@ function computeAccessLevel(
 
   // Rule 4: any other authenticated role gets full access
   return "full";
+}
+
+function toSupabaseCompatibleUser(vpsUser: VpsUser): User {
+  return {
+    id: vpsUser.userId,
+    email: vpsUser.email,
+    aud: "authenticated",
+    role: "authenticated",
+    app_metadata: {},
+    user_metadata: {},
+    identities: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  } as User;
+}
+
+function toProfile(vpsUser: VpsUser): Profile {
+  return {
+    id: vpsUser.userId,
+    email: vpsUser.email,
+    name: vpsUser.email,
+    dealer_id: vpsUser.dealerId,
+    status: "active",
+  };
+}
+
+function toRoles(vpsUser: VpsUser): UserRole[] {
+  return vpsUser.roles.map((role) => ({ role })) as UserRole[];
 }
 
 /**
@@ -315,6 +345,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
+    if (env.AUTH_BACKEND === "vps") {
+      const applyVpsUser = (vpsUser: VpsUser | null) => {
+        if (!isMounted) return;
+        setSession(null);
+        setUser(vpsUser ? toSupabaseCompatibleUser(vpsUser) : null);
+        setProfile(vpsUser ? toProfile(vpsUser) : null);
+        setRoles(vpsUser ? toRoles(vpsUser) : []);
+        setSubscription(null);
+      };
+
+      const initializeVps = async () => {
+        setLoading(true);
+        try {
+          const me = await vpsAuthApi.me();
+          applyVpsUser(me ?? vpsTokenStore.user);
+        } catch (err) {
+          subLog.error("VPS auth init error:", err);
+          applyVpsUser(null);
+        } finally {
+          if (isMounted) setLoading(false);
+        }
+      };
+
+      const onAuthChange = () => applyVpsUser(vpsTokenStore.user);
+      const onStorage = (e: StorageEvent) => {
+        if (e.key === "vps.accessToken" || e.key === "vps.refreshToken" || e.key === "vps.user") {
+          applyVpsUser(vpsTokenStore.user);
+        }
+      };
+
+      initializeVps();
+      window.addEventListener("vps-auth-change", onAuthChange);
+      window.addEventListener("storage", onStorage);
+
+      return () => {
+        isMounted = false;
+        window.removeEventListener("vps-auth-change", onAuthChange);
+        window.removeEventListener("storage", onStorage);
+      };
+    }
+
     /**
      * Phase 1 — Initial session bootstrap.
      *
@@ -406,7 +477,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    if (env.AUTH_BACKEND === "vps") {
+      await vpsAuthApi.logout();
+    } else {
+      await supabase.auth.signOut();
+    }
     setUser(null);
     setSession(null);
     setProfile(null);

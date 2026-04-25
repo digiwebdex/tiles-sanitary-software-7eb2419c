@@ -53,6 +53,8 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_AUTH_BACKEND: ${VITE_AUTH_BACKEND:-vps}
+        VITE_VPS_API_BASE: ${VITE_VPS_API_BASE:-https://api.sanitileserp.com}
     restart: unless-stopped
     ports:
       - "80:80"
