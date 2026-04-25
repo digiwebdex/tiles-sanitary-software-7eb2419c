@@ -107,6 +107,34 @@ function computeAccessLevel(
   return "full";
 }
 
+function toSupabaseCompatibleUser(vpsUser: VpsUser): User {
+  return {
+    id: vpsUser.userId,
+    email: vpsUser.email,
+    aud: "authenticated",
+    role: "authenticated",
+    app_metadata: {},
+    user_metadata: {},
+    identities: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  } as User;
+}
+
+function toProfile(vpsUser: VpsUser): Profile {
+  return {
+    id: vpsUser.userId,
+    email: vpsUser.email,
+    name: vpsUser.email,
+    dealer_id: vpsUser.dealerId,
+    status: "active",
+  };
+}
+
+function toRoles(vpsUser: VpsUser): UserRole[] {
+  return vpsUser.roles.map((role) => ({ role })) as UserRole[];
+}
+
 /**
  * Validates and reconciles dealer subscription status against current date.
  * Mutates DB status to "expired" or "active" as needed.
